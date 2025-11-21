@@ -1,0 +1,38 @@
+# .dockerignore
+# Exclude files from Docker build context for smaller, faster builds
+
+# Python cache and bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments (not needed - dependencies installed in container)
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# Environment files (may contain secrets)
+.env
+.env.*
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

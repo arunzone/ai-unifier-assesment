@@ -1,0 +1,18 @@
+# docker-compose.dev.yml
+# Docker Compose configuration for development environment.
+# Mounts local code for live editing and keeps container interactive.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    # Mount current directory to /app for live code edits
+    # Changes on host are immediately reflected in container
+    volumes:
+      - .:/app
+    # Keep container running interactively
+    stdin_open: true
+    tty: true
+    # Set working directory
+    working_dir: /app
