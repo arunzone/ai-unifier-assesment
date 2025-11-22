@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-Gpt4o}
+      - FASTAPI_HOST=0.0.0.0
+      - FASTAPI_PORT=8000
+    command: >
+      bash -c "pip install -e . && python -m ai_unifier_assesment"
+    volumes:
+      - .:/app

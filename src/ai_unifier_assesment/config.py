@@ -1,0 +1,46 @@
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class FastAPIConfig(BaseModel):
+    port: int = 8000
+    host: str = "0.0.0.0"  # nosec B104 - required for Docker
+
+
+class OpenAIConfig(BaseModel):
+    base_url: str
+    api_key: str
+    model_name: str = "Gpt4o"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
+    # Flat env vars mapped to fields
+    openai_base_url: str = Field(alias="OPENAI_BASE_URL")
+    openai_api_key: str = Field(alias="OPENAI_API_KEY")
+    model_name: str = Field(default="Gpt4o", alias="MODEL_NAME")
+    fastapi_port: int = Field(default=8000, alias="FASTAPI_PORT")
+    fastapi_host: str = Field(default="0.0.0.0", alias="FASTAPI_HOST")  # nosec B104
+
+    @property
+    def openai(self) -> OpenAIConfig:
+        return OpenAIConfig(
+            base_url=self.openai_base_url,
+            api_key=self.openai_api_key,
+            model_name=self.model_name,
+        )
+
+    @property
+    def fastapi(self) -> FastAPIConfig:
+        return FastAPIConfig(
+            port=self.fastapi_port,
+            host=self.fastapi_host,
+        )
+
+
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]
