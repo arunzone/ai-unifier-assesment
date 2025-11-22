@@ -13,6 +13,11 @@ class OpenAIConfig(BaseModel):
     model_name: str = "Gpt4o"
 
 
+class PricingConfig(BaseModel):
+    input_cost_per_1m: float
+    output_cost_per_1m: float
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -25,6 +30,9 @@ class Settings(BaseSettings):
     model_name: str = Field(default="Gpt4o", alias="MODEL_NAME")
     fastapi_port: int = Field(default=8000, alias="FASTAPI_PORT")
     fastapi_host: str = Field(default="0.0.0.0", alias="FASTAPI_HOST")  # nosec B104
+    pricing_input_cost_per_1m: float = Field(default=2.50, alias="PRICING_INPUT_COST_PER_1M")
+    pricing_output_cost_per_1m: float = Field(default=10.00, alias="PRICING_OUTPUT_COST_PER_1M")
+    memory_window_size: int = Field(default=5, alias="MEMORY_WINDOW_SIZE")
 
     @property
     def openai(self) -> OpenAIConfig:
@@ -39,6 +47,13 @@ class Settings(BaseSettings):
         return FastAPIConfig(
             port=self.fastapi_port,
             host=self.fastapi_host,
+        )
+
+    @property
+    def pricing(self) -> PricingConfig:
+        return PricingConfig(
+            input_cost_per_1m=self.pricing_input_cost_per_1m,
+            output_cost_per_1m=self.pricing_output_cost_per_1m,
         )
 
 

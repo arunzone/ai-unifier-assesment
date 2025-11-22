@@ -15,4 +15,5 @@ class Model:
             api_key=self._settings.openai.api_key,
             model=self._settings.openai.model_name,
             streaming=True,
+            stream_usage=True,
         )

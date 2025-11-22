@@ -4,8 +4,7 @@ from unittest.mock import patch
 import pytest
 from assertpy import assert_that
 
-from ai_unifier_assesment.config import Settings
-from ai_unifier_assesment.config import OpenAIConfig
+from ai_unifier_assesment.config import OpenAIConfig, PricingConfig, Settings
 
 
 def test_should_load_model_details_from_environment():
@@ -102,3 +101,17 @@ def test_should_raise_error_when_openai_api_key_missing():
     with patch.dict(os.environ, env_vars, clear=True):
         with pytest.raises(Exception):
             Settings()
+
+
+def test_should_load_pricing_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "PRICING_INPUT_COST_PER_1M": "5.00",
+        "PRICING_OUTPUT_COST_PER_1M": "15.00",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.pricing).is_equal_to(PricingConfig(input_cost_per_1m=5.00, output_cost_per_1m=15.00))

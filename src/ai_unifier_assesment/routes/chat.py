@@ -10,6 +10,7 @@ router = APIRouter()
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str
 
 
 @router.post("/api/chat/stream")
@@ -18,6 +19,6 @@ async def chat_stream(
     chat_service: Annotated[ChatService, Depends(ChatService)],
 ):
     return StreamingResponse(
-        chat_service.stream_response(request.message),
+        chat_service.stream_response(request.message, request.session_id),
         media_type="text/event-stream",
     )
