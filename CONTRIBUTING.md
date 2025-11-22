@@ -22,14 +22,6 @@ docker compose -f docker-compose.dev.yml build app
 docker compose -f docker-compose.dev.yml run --rm app bash
 ```
 
-### 3. Run your code
-
-Inside the container:
-
-```bash
-python src/app.py
-```
-
 ## Development Commands
 
 All commands are run inside the container shell.
@@ -64,7 +56,7 @@ All commands are run inside the container shell.
 
 ## Adding Dependencies
 
-1. Add packages to `requirements.txt`
+1. Add packages to `setup.cfg`
 2. Rebuild the container: `docker compose -f docker-compose.dev.yml build app`
 
 ## How It Works
