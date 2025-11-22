@@ -34,31 +34,18 @@ python src/app.py
 
 All commands are run inside the container shell.
 
-### Run tests
-
-```bash
-pytest
-```
-
-### Run linters
-
-```bash
-# Check code formatting
-black --check .
-
-# Lint code
-ruff check .
-
-# Type checking
-mypy src/
-```
+### Run all checks (lint + type check + tests)
+  tox
 
 ### Format code
+  tox -e format
 
-```bash
-black .
-ruff check --fix .
-```
+### Run tests only
+  tox -e test
+
+### Build package
+  tox -e build
+
 
 ## Project Structure
 

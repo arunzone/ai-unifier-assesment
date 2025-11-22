@@ -1,27 +1,14 @@
-# Dockerfile.dev
-# Development container for Python 3.12 with testing and linting tools.
-# Keeps host machine clean by running all development inside Docker.
-
 FROM python:3.12-slim
 
-# Install OS-level dependencies needed for building Python packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements first to leverage Docker layer caching
-# Dependencies won't be reinstalled unless requirements.txt changes
-COPY requirements.txt .
+RUN pip install --no-cache-dir tox
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code (after dependencies for better caching)
 COPY . .
 
-# Default command: open a bash shell for interactive development
 CMD ["bash"]

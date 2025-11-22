@@ -1,12 +1,4 @@
-# tests/test_app.py
-# Unit tests for the application
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from app import main
+from ai_unifier_assesment.app import main
 
 
 def test_main(capsys):
