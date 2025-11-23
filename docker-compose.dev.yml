@@ -2,6 +2,18 @@
 # Docker Compose configuration for development environment.
 # Mounts local code for live editing and keeps container interactive.
 
+x-develop:
+  watch:
+    - path: .
+      action: sync
+      target: /app
+      ignore:
+        - .venv/
+        - .git/
+        - __pycache__/
+        - "*.pyc"
+        - .pytest_cache/
+
 services:
   app:
     build:

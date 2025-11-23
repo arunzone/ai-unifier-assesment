@@ -1,3 +1,16 @@
+x-develop:
+  watch:
+    - path: .
+      action: sync
+      target: /app
+      ignore:
+        - .venv/
+        - .git/
+        - __pycache__/
+        - "*.pyc"
+        - .pytest_cache/
+        - data/
+
 services:
   ollama:
     image: ollama/ollama:latest
@@ -16,9 +29,27 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    entrypoint: ["sh", "-c", "ollama pull nomic-embed-text && ollama pull llama3.2"]
+    entrypoint: ["sh", "-c", "ollama pull nomic-embed-text && ollama pull llama3.1:8b-instruct-q4_K_M"]
     environment:
       - OLLAMA_HOST=ollama:11434
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_evaluation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   chroma:
     image: chromadb/chroma:latest
@@ -45,11 +76,18 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
     depends_on:
       ollama-pull:
         condition: service_completed_successfully
       chroma:
         condition: service_started
+      postgres:
+        condition: service_healthy
     command: >
       bash -c "
         set -e &&
@@ -60,6 +98,59 @@ services:
           curl -L 'https://www.mrsmuellersworld.com/uploads/1/3/0/5/13054185/lord-of-the-rings-01-the-fellowship-of-the-ring_full_text.pdf' -o /app/data/corpus/lotr-fellowship.pdf;
         fi &&
         python -m ai_unifier_assesment.ingest --directory /app/data/corpus
+      "
+
+  testset-generation:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+      - ./data/corpus:/app/data/corpus
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    depends_on:
+      ingestion:
+        condition: service_completed_successfully
+    command: >
+      bash -c "
+        pip install -e . &&
+        python -m ai_unifier_assesment.generate_testset --directory /app/data/corpus
+      "
+
+  benchmark:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    depends_on:
+      testset-generation:
+        condition: service_completed_successfully
+    command: >
+      bash -c "
+        pip install -e . &&
+        python -m ai_unifier_assesment.benchmark --verbose
       "
 
   app:
@@ -75,10 +166,15 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
       - FASTAPI_HOST=0.0.0.0
       - FASTAPI_PORT=8000
     depends_on:
-      ingestion:
+      benchmark:
         condition: service_completed_successfully
     command: >
       bash -c "pip install -e . && python -m ai_unifier_assesment"
@@ -88,3 +184,4 @@ services:
 volumes:
   ollama_data:
   chroma_data:
+  postgres_data:

@@ -53,11 +53,19 @@ def ingest_pdf(file_path: str) -> None:
 
 def ingest_directory(directory_path: str) -> None:
     settings = get_settings()
-    logger.info(f"Ingesting directory: {directory_path}")
-    logger.info(f"Chunk size: {settings.rag.chunk_size}, Overlap: {settings.rag.chunk_overlap}")
-
     service = create_ingestion_service()
     collection_name = settings.chroma.collection_name
+
+    # Check if collection already has documents
+    stats = service.get_collection_stats(collection_name)
+    if stats["document_count"] > 0:
+        logger.info(
+            f"Collection '{collection_name}' already has {stats['document_count']} documents, skipping ingestion"
+        )
+        return
+
+    logger.info(f"Ingesting directory: {directory_path}")
+    logger.info(f"Chunk size: {settings.rag.chunk_size}, Overlap: {settings.rag.chunk_overlap}")
 
     start_time = time.time()
     chunk_count = service.ingest_directory(directory_path, collection_name)

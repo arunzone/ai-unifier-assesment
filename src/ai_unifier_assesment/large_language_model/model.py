@@ -17,3 +17,12 @@ class Model:
             streaming=True,
             stream_usage=True,
         )
+
+    def get_chat_model_for_evaluation(self) -> BaseChatModel:
+        return ChatOpenAI(
+            base_url=self._settings.openai.base_url,
+            api_key=self._settings.openai.api_key,
+            model=self._settings.openai.model_name,
+            streaming=False,
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )

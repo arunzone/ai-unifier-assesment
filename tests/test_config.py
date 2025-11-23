@@ -4,7 +4,16 @@ from unittest.mock import patch
 import pytest
 from assertpy import assert_that
 
-from ai_unifier_assesment.config import ChromaConfig, OllamaConfig, OpenAIConfig, PricingConfig, RAGConfig, Settings
+from ai_unifier_assesment.config import (
+    ChromaConfig,
+    EvaluationConfig,
+    OllamaConfig,
+    OpenAIConfig,
+    PostgresConfig,
+    PricingConfig,
+    RAGConfig,
+    Settings,
+)
 
 
 def test_should_load_model_details_from_environment():
@@ -204,3 +213,66 @@ def test_should_use_default_rag_chunk_overlap_when_not_set():
     settings = Settings()
 
     assert_that(settings.rag.chunk_overlap).is_equal_to(100)
+
+
+def test_should_load_postgres_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "POSTGRES_HOST": "db-server",
+        "POSTGRES_PORT": "5433",
+        "POSTGRES_USER": "testuser",
+        "POSTGRES_PASSWORD": "testpass",
+        "POSTGRES_DB": "testdb",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.postgres).is_equal_to(
+        PostgresConfig(
+            host="db-server",
+            port=5433,
+            user="testuser",
+            password="testpass",
+            database="testdb",
+        )
+    )
+
+
+def test_should_use_default_postgres_values_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.postgres.host).is_equal_to("localhost")
+    assert_that(settings.postgres.port).is_equal_to(5432)
+    assert_that(settings.postgres.user).is_equal_to("rag_user")
+    assert_that(settings.postgres.database).is_equal_to("rag_evaluation")
+
+
+def test_should_generate_postgres_connection_string():
+    settings = Settings()
+
+    assert_that(settings.postgres.connection_string).is_equal_to(
+        "postgresql://rag_user:rag_password@localhost:5432/rag_evaluation"
+    )
+
+
+def test_should_load_evaluation_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "EVALUATION_TEST_SIZE": "50",
+        "EVALUATION_LLM_MODEL": "llama3",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.evaluation).is_equal_to(EvaluationConfig(test_size=50, llm_model="llama3"))
+
+
+def test_should_use_default_evaluation_values_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.evaluation.test_size).is_equal_to(25)
+    assert_that(settings.evaluation.llm_model).is_equal_to("llama3.1:8b-instruct-q4_K_M")

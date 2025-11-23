@@ -34,6 +34,23 @@ class RAGConfig(BaseModel):
     chunk_overlap: int
 
 
+class PostgresConfig(BaseModel):
+    host: str
+    port: int
+    user: str
+    password: str
+    database: str
+
+    @property
+    def connection_string(self) -> str:
+        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+
+class EvaluationConfig(BaseModel):
+    test_size: int
+    llm_model: str
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -56,6 +73,13 @@ class Settings(BaseSettings):
     chroma_collection_name: str = Field(default="rag_corpus", alias="CHROMA_COLLECTION_NAME")
     rag_chunk_size: int = Field(default=500, alias="RAG_CHUNK_SIZE")
     rag_chunk_overlap: int = Field(default=100, alias="RAG_CHUNK_OVERLAP")
+    postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
+    postgres_user: str = Field(default="rag_user", alias="POSTGRES_USER")
+    postgres_password: str = Field(default="rag_password", alias="POSTGRES_PASSWORD")
+    postgres_database: str = Field(default="rag_evaluation", alias="POSTGRES_DB")
+    evaluation_test_size: int = Field(default=25, alias="EVALUATION_TEST_SIZE")
+    evaluation_llm_model: str = Field(default="llama3.1:8b-instruct-q4_K_M", alias="EVALUATION_LLM_MODEL")
 
     @property
     def openai(self) -> OpenAIConfig:
@@ -96,6 +120,23 @@ class Settings(BaseSettings):
         return RAGConfig(
             chunk_size=self.rag_chunk_size,
             chunk_overlap=self.rag_chunk_overlap,
+        )
+
+    @property
+    def postgres(self) -> PostgresConfig:
+        return PostgresConfig(
+            host=self.postgres_host,
+            port=self.postgres_port,
+            user=self.postgres_user,
+            password=self.postgres_password,
+            database=self.postgres_database,
+        )
+
+    @property
+    def evaluation(self) -> EvaluationConfig:
+        return EvaluationConfig(
+            test_size=self.evaluation_test_size,
+            llm_model=self.evaluation_llm_model,
         )
 
 

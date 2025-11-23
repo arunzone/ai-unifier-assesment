@@ -49,6 +49,7 @@ def test_should_ingest_directory_using_collection_from_settings():
 
         with patch("ai_unifier_assesment.ingest.create_ingestion_service") as mock_create:
             mock_service = MagicMock()
+            mock_service.get_collection_stats.return_value = {"document_count": 0}
             mock_service.ingest_directory.return_value = 50
             mock_create.return_value = mock_service
 
