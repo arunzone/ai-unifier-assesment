@@ -1,4 +1,25 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: ["ollama", "pull", "nomic-embed-text"]
+    environment:
+      - OLLAMA_HOST=ollama:11434
+
   app:
     build:
       context: .
@@ -9,9 +30,16 @@ services:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MODEL_NAME=${MODEL_NAME:-Gpt4o}
+      - OLLAMA_BASE_URL=http://ollama:11434
       - FASTAPI_HOST=0.0.0.0
       - FASTAPI_PORT=8000
+    depends_on:
+      ollama:
+        condition: service_healthy
     command: >
       bash -c "pip install -e . && python -m ai_unifier_assesment"
     volumes:
       - .:/app
+
+volumes:
+  ollama_data:
