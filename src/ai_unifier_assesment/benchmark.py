@@ -33,7 +33,7 @@ def create_benchmark_service() -> BenchmarkService:
     return BenchmarkService(settings, evaluation_service, vector_store_service)
 
 
-def run_benchmark(k: int = 5, verbose: bool = False) -> Dict[str, Any]:
+def run_benchmark(k: int = 5, verbose: bool = False, save: bool = False) -> Dict[str, Any]:
     logger.info(f"Running top-{k} retrieval benchmark...")
 
     service = create_benchmark_service()
@@ -46,6 +46,10 @@ def run_benchmark(k: int = 5, verbose: bool = False) -> Dict[str, Any]:
     _print_summary_report(results, k)
     if verbose:
         _print_detailed_results(results)
+
+    if save:
+        run_id = service.save_benchmark_result(results)
+        print(f"Results saved to database with run_id: {run_id}")
 
     return results
 
@@ -88,11 +92,12 @@ def main() -> int:
     parser.add_argument("--k", type=int, default=5, help="Top-k retrieval (default: 5)")
     parser.add_argument("--verbose", action="store_true", help="Show detailed per-question results")
     parser.add_argument("--json", action="store_true", help="Output results as JSON")
+    parser.add_argument("--save", action="store_true", help="Save results to PostgreSQL database")
 
     args = parser.parse_args()
 
     try:
-        results = run_benchmark(k=args.k, verbose=args.verbose)
+        results = run_benchmark(k=args.k, verbose=args.verbose, save=args.save)
 
         if args.json:
             print(json.dumps(results, indent=2))

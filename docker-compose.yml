@@ -150,7 +150,7 @@ services:
     command: >
       bash -c "
         pip install -e . &&
-        python -m ai_unifier_assesment.benchmark --verbose
+        python -m ai_unifier_assesment.benchmark --verbose --save
       "
 
   app:
@@ -178,6 +178,26 @@ services:
         condition: service_completed_successfully
     command: >
       bash -c "pip install -e . && python -m ai_unifier_assesment"
+    volumes:
+      - .:/app
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8501:8501"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "pip install -r /app/dashboard/requirements.txt && streamlit run /app/dashboard/app.py --server.address=0.0.0.0 --server.port=8501"
     volumes:
       - .:/app
 

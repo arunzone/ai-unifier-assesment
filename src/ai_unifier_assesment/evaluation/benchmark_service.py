@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 from typing import Any, Annotated, Dict
 
 from fastapi import Depends
@@ -7,6 +8,12 @@ from fastapi import Depends
 from ai_unifier_assesment.config import Settings
 from ai_unifier_assesment.dependencies import get_cached_settings
 from ai_unifier_assesment.evaluation.evaluation_data_service import EvaluationDataService
+from ai_unifier_assesment.evaluation.models import (
+    BenchmarkRun,
+    create_database_engine,
+    create_tables,
+    get_session_factory,
+)
 from ai_unifier_assesment.rag.vector_store_service import VectorStoreService
 
 
@@ -116,3 +123,31 @@ class BenchmarkService:
         if n % 2 == 0:
             return (sorted_values[mid - 1] + sorted_values[mid]) / 2
         return sorted_values[mid]
+
+    def save_benchmark_result(self, results: Dict[str, Any]) -> str:
+        connection_string = self._settings.postgres.connection_string
+        engine = create_database_engine(connection_string)
+        create_tables(engine)
+        session_factory = get_session_factory(engine)
+
+        run_id = str(uuid.uuid4())[:8]
+
+        with session_factory() as session:
+            benchmark_run = BenchmarkRun(
+                run_id=run_id,
+                top_k=results.get("top_k", 5),
+                total_questions=results["total_questions"],
+                hits=results["hits"],
+                accuracy_percent=results["accuracy_percent"],
+                median_retrieval_time_ms=results["median_retrieval_time_ms"],
+                avg_retrieval_time_ms=results["avg_retrieval_time_ms"],
+                min_retrieval_time_ms=results["min_retrieval_time_ms"],
+                max_retrieval_time_ms=results["max_retrieval_time_ms"],
+                meets_latency_requirement=1 if results["meets_latency_requirement"] else 0,
+                details=results.get("details", []),
+            )
+            session.add(benchmark_run)
+            session.commit()
+            self._logger.info(f"Saved benchmark run with ID: {run_id}")
+
+        return run_id
