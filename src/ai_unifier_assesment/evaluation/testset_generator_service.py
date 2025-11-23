@@ -2,8 +2,10 @@ import logging
 from typing import Annotated, cast
 
 from fastapi import Depends
-from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms.base import BaseRagasLLM
+from ragas.embeddings.base import BaseRagasEmbeddings
 from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import embedding_factory
 from langchain_ollama import OllamaEmbeddings, ChatOllama
 from langchain_core.documents import Document
 from ragas.testset import TestsetGenerator, Testset
@@ -12,7 +14,6 @@ from ragas.testset.transforms import (
     apply_transforms,
     default_transforms,
 )
-from ragas.embeddings.base import BaseRagasEmbeddings  # Ragas Embeddings Base
 
 from ai_unifier_assesment.config import Settings
 from ai_unifier_assesment.dependencies import get_cached_settings
@@ -38,8 +39,9 @@ class TestsetGeneratorService:
             base_url=self._settings.ollama.base_url,
         )
 
-    # FIX: Use the Ragas-wrapped models for the graph build
-    def build_knowledge_graph(self, documents: list[Document], llm, embeddings: BaseRagasEmbeddings) -> KnowledgeGraph:
+    def build_knowledge_graph(
+        self, documents: list[Document], llm: BaseRagasLLM, embeddings: BaseRagasEmbeddings
+    ) -> KnowledgeGraph:
         kg = KnowledgeGraph()
 
         for doc in documents:
@@ -53,10 +55,6 @@ class TestsetGeneratorService:
                 )
             )
 
-        # Apply default transforms to enrich the knowledge graph
-        # NOTE: This function expects the *raw* LLM/Embeddings
-        # OR the graph should be built externally.
-        # Using Ragas-wrapped models for 'llm' and 'embedding_model' here is safer.
         transforms = default_transforms(documents=documents, llm=llm, embedding_model=embeddings)
         apply_transforms(kg, transforms)
 
@@ -68,30 +66,21 @@ class TestsetGeneratorService:
 
         self._logger.info(f"Generating {test_size} test samples from {len(documents)} documents")
 
-        # STEP 1: Get RAW models
         raw_llm = self.get_raw_llm()
         raw_embeddings = self.get_raw_embeddings()
 
-        # STEP 2: Wrap models for Ragas consistency
         ragas_llm = LangchainLLMWrapper(raw_llm)
-        ragas_embeddings = LangchainEmbeddingsWrapper(raw_embeddings)
+        ragas_embeddings = embedding_factory(raw_embeddings)
 
-        # STEP 3: Build Knowledge Graph
         self._logger.info("Building knowledge graph...")
-        # FIX: Pass the Ragas-wrapped models to the graph builder
         kg = self.build_knowledge_graph(documents, ragas_llm, ragas_embeddings)
 
-        # STEP 4: Initialize TestsetGenerator
         generator = TestsetGenerator(
-            # FIX: Use the Ragas-wrapped models
             llm=ragas_llm,
             embedding_model=ragas_embeddings,
             knowledge_graph=kg,
-            # Note: The new graph-based method often omits the old 'evolutions'
-            # and uses internal synthesizers based on the KG structure.
         )
 
-        # Use default query distribution
         result = generator.generate(testset_size=test_size)
         testset = cast(Testset, result)
 
@@ -100,13 +89,11 @@ class TestsetGeneratorService:
 
         for _, row in df.iterrows():
             item = {
-                # Standardize column access for newer Ragas
                 "question": row.get("user_input", row.get("question", "")),
                 "ground_truth_answer": row.get("reference", row.get("ground_truth", "")),
                 "ground_truth_contexts": row.get("reference_contexts", row.get("contexts", [])),
                 "source_metadata": {
                     "synthesizer_name": row.get("synthesizer_name", "unknown"),
-                    # Note: You can retrieve more metadata from the KG nodes if needed
                 },
             }
             results.append(item)

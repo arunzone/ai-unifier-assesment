@@ -59,7 +59,7 @@ def test_should_use_default_test_size_from_settings():
 
             with patch("ai_unifier_assesment.evaluation.testset_generator_service.TestsetGenerator") as mock_gen_class:
                 with patch("ai_unifier_assesment.evaluation.testset_generator_service.LangchainLLMWrapper"):
-                    with patch("ai_unifier_assesment.evaluation.testset_generator_service.LangchainEmbeddingsWrapper"):
+                    with patch("ai_unifier_assesment.evaluation.testset_generator_service.embedding_factory"):
                         mock_generator = MagicMock()
                         mock_gen_class.return_value = mock_generator
 
@@ -93,7 +93,7 @@ def test_should_use_custom_test_size():
 
             with patch("ai_unifier_assesment.evaluation.testset_generator_service.TestsetGenerator") as mock_gen_class:
                 with patch("ai_unifier_assesment.evaluation.testset_generator_service.LangchainLLMWrapper"):
-                    with patch("ai_unifier_assesment.evaluation.testset_generator_service.LangchainEmbeddingsWrapper"):
+                    with patch("ai_unifier_assesment.evaluation.testset_generator_service.embedding_factory"):
                         mock_generator = MagicMock()
                         mock_gen_class.return_value = mock_generator
 

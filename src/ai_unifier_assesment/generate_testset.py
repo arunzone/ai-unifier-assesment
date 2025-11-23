@@ -16,6 +16,7 @@ import time
 
 from ai_unifier_assesment.config import get_settings
 from ai_unifier_assesment.evaluation.evaluation_data_service import EvaluationDataService
+from ai_unifier_assesment.evaluation.sample_testset import SAMPLE_QUESTIONS
 from ai_unifier_assesment.evaluation.testset_generator_service import TestsetGeneratorService
 from ai_unifier_assesment.rag.document_loader_service import DocumentLoaderService
 
@@ -85,12 +86,27 @@ def clear_data() -> None:
     logger.info(f"Cleared {count} questions from database")
 
 
+def load_sample_testset() -> None:
+    settings = get_settings()
+    evaluation_service = EvaluationDataService(settings)
+    evaluation_service.initialize_database()
+
+    existing_count = evaluation_service.get_question_count()
+    if existing_count > 0:
+        logger.info(f"Database already has {existing_count} evaluation questions, skipping sample load")
+        return
+
+    evaluation_service.save_questions_batch(SAMPLE_QUESTIONS)
+    logger.info(f"Loaded {len(SAMPLE_QUESTIONS)} sample evaluation questions into database")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate evaluation dataset using Ragas")
     parser.add_argument("--directory", type=str, default="data/corpus", help="Directory containing PDFs")
     parser.add_argument("--test-size", type=int, help="Number of test samples to generate")
     parser.add_argument("--stats", action="store_true", help="Show dataset statistics")
     parser.add_argument("--clear", action="store_true", help="Clear existing evaluation data")
+    parser.add_argument("--sample", action="store_true", help="Load sample testset instead of generating")
 
     args = parser.parse_args()
 
@@ -101,6 +117,10 @@ def main() -> int:
 
         if args.clear:
             clear_data()
+            return 0
+
+        if args.sample:
+            load_sample_testset()
             return 0
 
         generate_testset(args.directory, args.test_size)

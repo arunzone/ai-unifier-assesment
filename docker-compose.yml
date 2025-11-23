@@ -124,7 +124,7 @@ services:
     command: >
       bash -c "
         pip install -e . &&
-        python -m ai_unifier_assesment.generate_testset --directory /app/data/corpus
+        python -m ai_unifier_assesment.generate_testset --sample
       "
 
   benchmark:
