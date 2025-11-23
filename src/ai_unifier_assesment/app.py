@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from ai_unifier_assesment.dependencies import get_cached_settings
 from ai_unifier_assesment.routes.chat import router as chat_router
+from ai_unifier_assesment.routes.rag import router as rag_router
 
 
 @asynccontextmanager
@@ -14,6 +15,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(chat_router)
+app.include_router(rag_router)
 
 
 def main():

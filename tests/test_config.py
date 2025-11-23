@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 from assertpy import assert_that
 
-from ai_unifier_assesment.config import OpenAIConfig, PricingConfig, Settings
+from ai_unifier_assesment.config import ChromaConfig, OllamaConfig, OpenAIConfig, PricingConfig, RAGConfig, Settings
 
 
 def test_should_load_model_details_from_environment():
@@ -115,3 +115,92 @@ def test_should_load_pricing_from_environment():
         settings = Settings()
 
     assert_that(settings.pricing).is_equal_to(PricingConfig(input_cost_per_1m=5.00, output_cost_per_1m=15.00))
+
+
+def test_should_load_ollama_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "OLLAMA_BASE_URL": "http://ollama:11434",
+        "OLLAMA_EMBEDDING_MODEL": "custom-embed",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.ollama).is_equal_to(
+        OllamaConfig(base_url="http://ollama:11434", embedding_model="custom-embed")
+    )
+
+
+def test_should_use_default_ollama_base_url_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.ollama.base_url).is_equal_to("http://localhost:11434")
+
+
+def test_should_use_default_ollama_embedding_model_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.ollama.embedding_model).is_equal_to("nomic-embed-text")
+
+
+def test_should_load_chroma_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "CHROMA_HOST": "chroma-server",
+        "CHROMA_PORT": "8001",
+        "CHROMA_COLLECTION_NAME": "custom_collection",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.chroma).is_equal_to(
+        ChromaConfig(host="chroma-server", port=8001, collection_name="custom_collection")
+    )
+
+
+def test_should_use_default_chroma_host_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.chroma.host).is_equal_to("localhost")
+
+
+def test_should_use_default_chroma_port_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.chroma.port).is_equal_to(8000)
+
+
+def test_should_use_default_chroma_collection_name_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.chroma.collection_name).is_equal_to("rag_corpus")
+
+
+def test_should_load_rag_config_from_environment():
+    env_vars = {
+        "OPENAI_BASE_URL": "https://api.com",
+        "OPENAI_API_KEY": "sk-test",
+        "RAG_CHUNK_SIZE": "1000",
+        "RAG_CHUNK_OVERLAP": "200",
+    }
+
+    with patch.dict(os.environ, env_vars, clear=True):
+        settings = Settings()
+
+    assert_that(settings.rag).is_equal_to(RAGConfig(chunk_size=1000, chunk_overlap=200))
+
+
+def test_should_use_default_rag_chunk_size_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.rag.chunk_size).is_equal_to(500)
+
+
+def test_should_use_default_rag_chunk_overlap_when_not_set():
+    settings = Settings()
+
+    assert_that(settings.rag.chunk_overlap).is_equal_to(100)
