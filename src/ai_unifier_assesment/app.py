@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ai_unifier_assesment.dependencies import get_cached_settings
 from ai_unifier_assesment.routes.chat import router as chat_router
 from ai_unifier_assesment.routes.rag import router as rag_router
+from ai_unifier_assesment.routes.agent import router as agent_router
 
 
 @asynccontextmanager
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.include_router(chat_router)
 app.include_router(rag_router)
+app.include_router(agent_router)
 
 
 def main():

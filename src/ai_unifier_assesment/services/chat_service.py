@@ -49,7 +49,6 @@ class ChatService:
         # Count tokens using tiktoken
         prompt_tokens = self._token_counter.count_message_tokens(messages)
         completion_tokens = self._token_counter.count_text_tokens(completion_text)
-        print(f"stream_response: Prompt tokens: {prompt_tokens}, Completion tokens: {completion_tokens}", flush=True)
         stats = self._metrics.build_stats(start_time, prompt_tokens, completion_tokens)
         yield f"event: stats\ndata: {json.dumps(stats)}\n\n"
 

@@ -22,12 +22,10 @@ class TokenCounter:
     def count_message_tokens(self, messages: list[dict]) -> int:
         tokens = 0
         for message in messages:
-            # Every message has 3 overhead tokens: <|start|>role<|end|>
             tokens += 3
             tokens += len(self._encoding.encode(message.get("content", "")))
             if message.get("name"):
                 tokens += len(self._encoding.encode(message["name"]))
-        # Every reply is primed with <|start|>assistant<|message|>
         tokens += 3
         return tokens
 
@@ -40,15 +38,8 @@ class StreamMetrics:
         self._pricing = settings.pricing
 
     def _calculate_cost(self, prompt_tokens: int, completion_tokens: int) -> Decimal:
-        print(
-            f"_calculate_cost # prompt_tokens: {prompt_tokens}, completion_tokens: {completion_tokens}",
-            self._pricing.input_cost_per_1m,
-            self._pricing.output_cost_per_1m,
-        )
         input_cost = Decimal(prompt_tokens) / Decimal(1_000_000) * Decimal(str(self._pricing.input_cost_per_1m))
-        print(f"input_cost: {input_cost}")
         output_cost = Decimal(completion_tokens) / Decimal(1_000_000) * Decimal(str(self._pricing.output_cost_per_1m))
-        print(f"output_cost: {output_cost}")
         return input_cost + output_cost
 
     def build_stats(
@@ -57,7 +48,6 @@ class StreamMetrics:
         prompt_tokens: int,
         completion_tokens: int,
     ) -> dict:
-        print(f"build_stats # prompt_tokens: {prompt_tokens}, completion_tokens: {completion_tokens}")
         latency_ms = (time.time() - start_time) * 1000
         cost = self._calculate_cost(prompt_tokens, completion_tokens)
 

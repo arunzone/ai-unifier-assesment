@@ -107,3 +107,21 @@ def test_should_create_retriever_with_custom_k():
             service.get_retriever(k=10)
 
             assert_that(mock_vector_store.as_retriever.call_args[1]["search_kwargs"]["k"]).is_equal_to(10)
+
+
+def test_should_raise_connection_error_when_chromadb_fails():
+    settings = MagicMock(spec=Settings)
+    settings.chroma.host = "invalid-host"
+    settings.chroma.port = 9999
+    embedding_service = MagicMock(spec=EmbeddingService)
+
+    service = VectorStoreService(settings, embedding_service)
+
+    with patch("ai_unifier_assesment.rag.vector_store_service.chromadb.HttpClient") as mock_client:
+        mock_client.side_effect = Exception("Connection refused")
+
+        try:
+            service.get_client()
+            assert False, "Expected ConnectionError to be raised"
+        except ConnectionError as e:
+            assert_that(str(e)).contains("Unable to establish connection to ChromaDB server")
