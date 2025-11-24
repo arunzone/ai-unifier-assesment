@@ -43,6 +43,12 @@ class PostgresConfig(BaseModel):
 
     @property
     def connection_string(self) -> str:
+        # Use psycopg (version 3) explicitly for SQLAlchemy
+        return f"postgresql+psycopg://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+
+    @property
+    def raw_connection_string(self) -> str:
+        # Plain PostgreSQL connection string for psycopg (without SQLAlchemy dialect)
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
 

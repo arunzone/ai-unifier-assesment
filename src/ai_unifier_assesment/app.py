@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from ai_unifier_assesment.dependencies import get_cached_settings
 from ai_unifier_assesment.routes.agent import router as agent_router
 from ai_unifier_assesment.routes.chat import router as chat_router
+from ai_unifier_assesment.routes.code_healing import router as code_healing_router
+from ai_unifier_assesment.routes.metrics_routes import router as metrics_router
 from ai_unifier_assesment.routes.rag import router as rag_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -31,6 +33,8 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(rag_router)
 app.include_router(agent_router)
+app.include_router(code_healing_router)
+app.include_router(metrics_router)
 
 
 def main():

@@ -92,10 +92,12 @@ if prompt := st.chat_input("Type your message..."):
                                 pass
                             current_event = None
                         else:
-                            # Regular content
+                            # Regular content - accumulate and display
                             full_response += data
+                            # Display with cursor during streaming
                             message_placeholder.markdown(full_response + "▌")
 
+            # Once streaming is complete, render as markdown
             message_placeholder.markdown(full_response)
 
             # Display stats

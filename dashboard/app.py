@@ -11,25 +11,26 @@ import os
 import streamlit as st
 
 st.set_page_config(
-    page_title="RAG Evaluation Dashboard",
+    page_title="AI Unifier Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.title("RAG Evaluation Dashboard")
+st.title("AI Unifier Dashboard")
 st.markdown("---")
 
 st.markdown("""
-## Welcome to the RAG Evaluation Dashboard
+## Welcome to the AI Unifier Dashboard
 
-This dashboard provides insights into your RAG system's performance:
+This dashboard provides insights into your AI system's capabilities:
 
 ### Pages
 
 - **Chat**: GPT-like chat interface with streaming and cost telemetry
 - **Metrics**: View latency and cost metrics over time for chat interactions
 - **Evaluation**: Analyze retrieval accuracy curves from benchmark runs
+- **Code Healing**: Self-healing code generation assistant with automatic testing
 
 ### Getting Started
 
@@ -40,7 +41,9 @@ This dashboard provides insights into your RAG system's performance:
 
 2. Use the chat API to generate metrics data
 
-3. Navigate to the pages in the sidebar to view visualizations
+3. Try the Code Healing assistant to generate working code from natural language
+
+4. Navigate to the pages in the sidebar to view visualizations
 
 ### Configuration
 

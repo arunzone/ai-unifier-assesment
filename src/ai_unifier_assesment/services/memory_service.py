@@ -16,7 +16,7 @@ class MemoryService:
     def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
         return PostgresChatMessageHistory(
             session_id=session_id,
-            connection_string=self._settings.postgres.connection_string,
+            connection_string=self._settings.postgres.raw_connection_string,
         )
 
     def get_trimmer(self):

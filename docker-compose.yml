@@ -126,6 +126,27 @@ services:
         python -m ai_unifier_assesment.benchmark --verbose --save
       "
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "
+        pip install -e . &&
+        alembic upgrade head
+      "
+
   app:
     build:
       context: .
@@ -148,6 +169,8 @@ services:
       - FASTAPI_PORT=8000
       - PYTHONUNBUFFERED=1
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       benchmark:
         condition: service_completed_successfully
     command: >

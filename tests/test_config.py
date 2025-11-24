@@ -253,7 +253,7 @@ def test_should_generate_postgres_connection_string():
     settings = Settings()
 
     assert_that(settings.postgres.connection_string).is_equal_to(
-        "postgresql://rag_user:rag_password@localhost:5432/rag_evaluation"
+        "postgresql+psycopg://rag_user:rag_password@localhost:5432/rag_evaluation"
     )
 
 

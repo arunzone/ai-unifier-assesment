@@ -8,6 +8,7 @@ from assertpy import assert_that
 from ai_unifier_assesment.large_language_model.model import Model
 from ai_unifier_assesment.services.chat_service import ChatService
 from ai_unifier_assesment.services.stream_metrics import StreamMetrics, TokenCounter
+from ai_unifier_assesment.repositories.metrics_repository import MetricsRepository
 
 
 @dataclass
@@ -46,7 +47,9 @@ def create_service_with_mocks():
     mock_token_counter.count_message_tokens.return_value = 100
     mock_token_counter.count_text_tokens.return_value = 50
 
-    service = ChatService(mock_model, mock_metrics, mock_memory_service, mock_token_counter)
+    mock_metrics_repo = Mock(spec=MetricsRepository)
+
+    service = ChatService(mock_model, mock_metrics, mock_memory_service, mock_token_counter, mock_metrics_repo)
     return service, mock_model, mock_metrics, mock_memory_service, mock_token_counter
 
 

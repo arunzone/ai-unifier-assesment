@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from assertpy import assert_that
@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from ai_unifier_assesment.app import app
 from ai_unifier_assesment.agent.trip_planner_agent import TripPlannerAgent
+from ai_unifier_assesment.repositories.metrics_repository import MetricsRepository
 
 
 @pytest.fixture
@@ -14,8 +15,14 @@ def mock_agent():
 
 
 @pytest.fixture
-def client(mock_agent):
+def mock_metrics_repo():
+    return MagicMock(spec=MetricsRepository)
+
+
+@pytest.fixture
+def client(mock_agent, mock_metrics_repo):
     app.dependency_overrides[TripPlannerAgent] = lambda: mock_agent
+    app.dependency_overrides[MetricsRepository] = lambda: mock_metrics_repo
     yield TestClient(app)
     app.dependency_overrides.clear()
 
