@@ -16,6 +16,7 @@ class Model:
             model=self._settings.openai.model_name,
             streaming=True,
             stream_usage=True,
+            model_kwargs={"stream_options": {"include_usage": True}},
         )
 
     def get_chat_model_for_evaluation(self) -> BaseChatModel:

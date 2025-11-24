@@ -16,44 +16,6 @@ def create_settings(input_cost: float = 2.50, output_cost: float = 10.00) -> Set
     return settings
 
 
-def create_chunk_with_usage(input_tokens: int, output_tokens: int):
-    chunk = Mock()
-    chunk.usage_metadata = {
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-    }
-    return chunk
-
-
-def test_should_return_tokens_from_chunk():
-    metrics = StreamMetrics(create_settings())
-    chunk = create_chunk_with_usage(100, 50)
-
-    tokens = metrics.extract_tokens(chunk)
-
-    assert_that(tokens).contains(100, 50)
-
-
-def test_should_return_zero_when_no_usage_metadata():
-    metrics = StreamMetrics(create_settings())
-    chunk = Mock()
-    chunk.usage_metadata = None
-
-    tokens = metrics.extract_tokens(chunk)
-
-    assert_that(tokens).contains(0, 0)
-
-
-def test_should_return_zero_when_no_usage_metadata_attr():
-    metrics = StreamMetrics(create_settings())
-    chunk = Mock(spec=[])  # No attributes
-
-    prompt_tokens, completion_tokens = metrics.extract_tokens(chunk)
-
-    assert_that(prompt_tokens).is_equal_to(0)
-    assert_that(completion_tokens).is_equal_to(0)
-
-
 def test_build_stats_should_return_prompt_tokens():
     metrics = StreamMetrics(create_settings())
     start_time = time.time()

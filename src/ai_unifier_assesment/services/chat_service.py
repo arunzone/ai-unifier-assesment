@@ -7,7 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from ai_unifier_assesment.large_language_model.model import Model
-from ai_unifier_assesment.services.stream_metrics import StreamMetrics
+from ai_unifier_assesment.services.stream_metrics import StreamMetrics, TokenCounter
 from ai_unifier_assesment.services.memory_service import MemoryService
 
 
@@ -16,53 +16,63 @@ class ChatService:
         self,
         model: Annotated[Model, Depends(Model)],
         metrics: Annotated[StreamMetrics, Depends(StreamMetrics)],
-        memory_service: Annotated[MemoryService, Depends(MemoryService)],  # Injected
+        memory_service: Annotated[MemoryService, Depends(MemoryService)],
+        token_counter: Annotated[TokenCounter, Depends(TokenCounter)],
     ):
         self._model = model
         self._metrics = metrics
         self._memory_service = memory_service
+        self._token_counter = token_counter
 
     async def stream_response(self, message: str, session_id: str) -> AsyncGenerator[str, None]:
         start_time = time.time()
-        prompt_tokens = 0
-        completion_tokens = 0
+        completion_text = ""
 
-        llm = self._model.get_chat_model()
-        trimmer = self._memory_service.get_trimmer()
-        prompt = await self.prompt_templated()
-        chain_with_history = await self.chain_from(llm, prompt, trimmer)
+        chain_with_history = await self._build_chain()
+
+        # Build messages for token counting
+        history = self._memory_service.get_session_history(session_id)
+        messages = [{"role": "system", "content": "You are a helpful assistant."}]
+        for msg in history.messages:
+            role = "assistant" if msg.type == "ai" else "user"
+            messages.append({"role": role, "content": msg.content})
+        messages.append({"role": "user", "content": message})
 
         async for chunk in chain_with_history.astream(
-            {"message": message}, config={"configurable": {"session_id": session_id}}
+            {"message": message},
+            config={"configurable": {"session_id": session_id}},
         ):
             if chunk.content:
+                completion_text += chunk.content
                 yield f"data: {chunk.content}\n\n"
 
-            prompt_tokens, completion_tokens = self._metrics.extract_tokens(chunk)
+        # Count tokens using tiktoken
+        prompt_tokens = self._token_counter.count_message_tokens(messages)
+        completion_tokens = self._token_counter.count_text_tokens(completion_text)
+        print(f"stream_response: Prompt tokens: {prompt_tokens}, Completion tokens: {completion_tokens}", flush=True)
         stats = self._metrics.build_stats(start_time, prompt_tokens, completion_tokens)
-
         yield f"event: stats\ndata: {json.dumps(stats)}\n\n"
 
-    async def chain_from(self, llm, prompt, trimmer) -> RunnableWithMessageHistory:
+    async def _build_chain(self) -> RunnableWithMessageHistory:
+        llm = self._model.get_chat_model()
+        trimmer = self._memory_service.get_trimmer()
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You are a helpful assistant."),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{message}"),
+            ]
+        )
+
         chain = (
             {"chat_history": lambda x: trimmer.invoke(x["chat_history"]), "message": lambda x: x["message"]}
             | prompt
             | llm
         )
 
-        chain_with_history = RunnableWithMessageHistory(
+        return RunnableWithMessageHistory(
             chain,
-            self._memory_service.get_session_history,  # Pass the bound method
+            self._memory_service.get_session_history,
             input_messages_key="message",
             history_messages_key="chat_history",
-        )
-        return chain_with_history
-
-    async def prompt_templated(self) -> ChatPromptTemplate:
-        return ChatPromptTemplate.from_messages(
-            [
-                ("system", "You are a helpful assistant."),
-                MessagesPlaceholder(variable_name="chat_history"),
-                ("human", "{message}"),
-            ]
         )

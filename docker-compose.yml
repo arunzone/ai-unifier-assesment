@@ -100,33 +100,6 @@ services:
         python -m ai_unifier_assesment.ingest --directory /app/data/corpus
       "
 
-  testset-generation:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    volumes:
-      - .:/app
-      - ./data/corpus:/app/data/corpus
-    environment:
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - CHROMA_HOST=chroma
-      - CHROMA_PORT=8000
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=rag_user
-      - POSTGRES_PASSWORD=rag_password
-      - POSTGRES_DB=rag_evaluation
-    depends_on:
-      ingestion:
-        condition: service_completed_successfully
-    command: >
-      bash -c "
-        pip install -e . &&
-        python -m ai_unifier_assesment.generate_testset --sample
-      "
-
   benchmark:
     build:
       context: .
@@ -145,7 +118,7 @@ services:
       - POSTGRES_PASSWORD=rag_password
       - POSTGRES_DB=rag_evaluation
     depends_on:
-      testset-generation:
+      ingestion:
         condition: service_completed_successfully
     command: >
       bash -c "
@@ -173,6 +146,7 @@ services:
       - POSTGRES_DB=rag_evaluation
       - FASTAPI_HOST=0.0.0.0
       - FASTAPI_PORT=8000
+      - PYTHONUNBUFFERED=1
     depends_on:
       benchmark:
         condition: service_completed_successfully

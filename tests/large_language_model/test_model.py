@@ -39,5 +39,6 @@ def test_get_chat_model_should_return_chat_openai():
             model="gpt-4o",
             streaming=True,
             stream_usage=True,
+            model_kwargs={"stream_options": {"include_usage": True}},
         )
         assert_that(result).is_not_none()

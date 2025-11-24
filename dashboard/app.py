@@ -27,6 +27,7 @@ This dashboard provides insights into your RAG system's performance:
 
 ### Pages
 
+- **Chat**: GPT-like chat interface with streaming and cost telemetry
 - **Metrics**: View latency and cost metrics over time for chat interactions
 - **Evaluation**: Analyze retrieval accuracy curves from benchmark runs
 
