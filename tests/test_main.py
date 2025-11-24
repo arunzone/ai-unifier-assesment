@@ -11,5 +11,5 @@ def test_should_start_uvicorn_server():
             "ai_unifier_assesment.app:app",
             host="0.0.0.0",
             port=8000,
-            reload=False,
+            reload=True,
         )

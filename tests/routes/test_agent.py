@@ -61,11 +61,6 @@ def test_plan_trip_returns_expected_response(client, mock_agent):
             ],
             "summary": "A budget-friendly 2-day Auckland adventure",
         },
-        "scratchpad": [
-            "[User] Plan a 2-day trip to Auckland for under NZ$500",
-            "[Agent] Searching for flights...",
-            "[Agent] Generated final itinerary with total cost: $420",
-        ],
     }
 
     response = client.post(
@@ -114,11 +109,6 @@ def test_plan_trip_returns_expected_response(client, mock_agent):
                 ],
                 "summary": "A budget-friendly 2-day Auckland adventure",
             },
-            "scratchpad": [
-                "[User] Plan a 2-day trip to Auckland for under NZ$500",
-                "[Agent] Searching for flights...",
-                "[Agent] Generated final itinerary with total cost: $420",
-            ],
         }
     )
 
@@ -126,7 +116,6 @@ def test_plan_trip_returns_expected_response(client, mock_agent):
 def test_plan_trip_returns_null_itinerary_on_failure(client, mock_agent):
     mock_agent.plan_trip.return_value = {
         "itinerary": None,
-        "scratchpad": ["[User] Invalid request", "[Agent] Error parsing itinerary"],
     }
 
     response = client.post(
@@ -137,6 +126,5 @@ def test_plan_trip_returns_null_itinerary_on_failure(client, mock_agent):
     assert_that(response.json()).is_equal_to(
         {
             "itinerary": None,
-            "scratchpad": ["[User] Invalid request", "[Agent] Error parsing itinerary"],
         }
     )

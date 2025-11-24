@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -5,9 +6,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ai_unifier_assesment.dependencies import get_cached_settings
+from ai_unifier_assesment.routes.agent import router as agent_router
 from ai_unifier_assesment.routes.chat import router as chat_router
 from ai_unifier_assesment.routes.rag import router as rag_router
-from ai_unifier_assesment.routes.agent import router as agent_router
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
 @asynccontextmanager
@@ -36,5 +39,5 @@ def main():
         "ai_unifier_assesment.app:app",
         host=settings.fastapi.host,
         port=settings.fastapi.port,
-        reload=False,
+        reload=True,
     )

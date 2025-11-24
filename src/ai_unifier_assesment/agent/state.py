@@ -1,4 +1,3 @@
-import operator
 from datetime import date
 from typing import Annotated, Optional
 
@@ -85,7 +84,6 @@ class TripPlannerState(BaseModel):
 
     messages: Annotated[list[AnyMessage], add_messages]
     constraints: Optional[TripConstraints] = None
-    scratchpad: Annotated[list[str], operator.add] = Field(default_factory=list)
     flight_options: list[FlightOption] = Field(default_factory=list)
     weather_forecast: list[WeatherInfo] = Field(default_factory=list)
     attractions: list[Attraction] = Field(default_factory=list)
