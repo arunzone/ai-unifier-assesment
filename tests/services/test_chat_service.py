@@ -24,7 +24,7 @@ def create_service_with_mocks():
     """Create ChatService with all required mocks."""
     mock_model = Mock(spec=Model)
     mock_llm = Mock()
-    mock_model.get_chat_model.return_value = mock_llm
+    mock_model.stream_model.return_value = mock_llm
 
     mock_metrics = Mock(spec=StreamMetrics)
     mock_metrics.build_stats.return_value = {

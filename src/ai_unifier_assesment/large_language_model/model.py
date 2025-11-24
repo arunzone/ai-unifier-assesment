@@ -9,7 +9,7 @@ class Model:
     def __init__(self, settings: Annotated[Settings, Depends(get_settings)]):
         self._settings = settings
 
-    def get_chat_model(self) -> BaseChatModel:
+    def stream_model(self) -> BaseChatModel:
         return ChatOpenAI(
             base_url=self._settings.openai.base_url,
             api_key=self._settings.openai.api_key,

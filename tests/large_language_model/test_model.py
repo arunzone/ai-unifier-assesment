@@ -24,14 +24,14 @@ def test_model_should_store_settings():
     assert_that(model._settings).is_same_as(settings)
 
 
-def test_get_chat_model_should_return_chat_openai():
+def test_stream_model_should_return_chat_openai():
     settings = create_mock_settings()
     model = Model(settings)
 
     with patch("ai_unifier_assesment.large_language_model.model.ChatOpenAI") as mock_chat:
         mock_chat.return_value = Mock()
 
-        result = model.get_chat_model()
+        result = model.stream_model()
 
         mock_chat.assert_called_once_with(
             base_url="https://api.example.com",

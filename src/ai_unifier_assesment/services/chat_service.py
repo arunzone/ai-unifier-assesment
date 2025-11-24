@@ -53,7 +53,7 @@ class ChatService:
         yield f"event: stats\ndata: {json.dumps(stats)}\n\n"
 
     async def _build_chain(self) -> RunnableWithMessageHistory:
-        llm = self._model.get_chat_model()
+        llm = self._model.stream_model()
         trimmer = self._memory_service.get_trimmer()
         prompt = ChatPromptTemplate.from_messages(
             [
