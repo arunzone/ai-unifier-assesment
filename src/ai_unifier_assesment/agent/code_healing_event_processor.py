@@ -38,7 +38,11 @@ class WorkdirSetupMapper(NodeEventMapper):
 
 class CodeGeneratedMapper(NodeEventMapper):
     def map(self, updates: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
-        return "code_generated", {"code_length": len(updates.get("current_code", ""))}
+        current_code = updates.get("current_code", "")
+        return "code_generated", {
+            "code_length": len(current_code),
+            "code": current_code,
+        }
 
 
 class CodeWrittenMapper(NodeEventMapper):
@@ -65,7 +69,13 @@ class FinalizeMapper(NodeEventMapper):
     def map(self, updates: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
         final_message = updates.get("final_message", "")
         event_type = "success" if final_message.startswith("Success!") else "failure"
-        return event_type, {"message": final_message}
+        return event_type, {
+            "message": final_message,
+            "final_code": updates.get("final_code", ""),
+            "working_directory": updates.get("working_directory", ""),
+            "test_output": updates.get("test_output", ""),
+            "attempts": updates.get("attempts", 1),
+        }
 
 
 class CodeHealingEventProcessor:

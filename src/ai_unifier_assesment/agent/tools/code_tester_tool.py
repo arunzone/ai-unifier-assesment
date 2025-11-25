@@ -27,22 +27,38 @@ def _get_python_command() -> list[str]:
 
 
 class CodeTesterTool:
+    def _translate_container_path_to_host(self, container_path: Path) -> Path:
+        container_workspace = Path("/app")
+        host_workspace = Path("/Users/arun/workspace/arun/ai-unifier-assesment")
+
+        if not str(container_path).startswith(str(container_workspace)):
+            return container_path
+
+        relative_path = container_path.relative_to(container_workspace)
+        host_path = host_workspace / relative_path
+        return host_path
+
     def _execute_in_docker(self, working_dir: Path, timeout: int) -> CodeTesterOutput:
         DOCKER_IMAGE = "rust:1.70-slim"
-        TEST_COMMAND = "cargo test --color never"
+
+        resolved_path = working_dir.resolve()
+        host_path = self._translate_container_path_to_host(resolved_path)
 
         command = [
             "docker",
             "run",
             "--rm",
             "--volume",
-            f"{working_dir.resolve()}:/app:ro",
+            f"{host_path}:/app",
             "--workdir",
             "/app",
             "--network",
             "none",
             DOCKER_IMAGE,
-            TEST_COMMAND,
+            "cargo",
+            "test",
+            "--color",
+            "never",
         ]
 
         command_str = " ".join(command)
@@ -57,7 +73,6 @@ class CodeTesterTool:
             )
 
             success = result.returncode == 0
-            logger.info(f"Docker execution completed with exit code {result.returncode}, success={success}")
 
             return CodeTesterOutput(
                 success=success,
@@ -94,7 +109,6 @@ class CodeTesterTool:
             )
 
             success = result.returncode == 0
-            logger.info(f"Local execution completed with exit code {result.returncode}, success={success}")
 
             return CodeTesterOutput(
                 success=success,
@@ -109,6 +123,31 @@ class CodeTesterTool:
             logger.error(error_msg)
             return CodeTesterOutput(success=False, stdout="", stderr=error_msg, exit_code=-1, command=command_str)
 
+    def _ensure_rust_project_structure(self, working_dir: Path) -> None:
+        src_dir = working_dir / "src"
+        src_dir.mkdir(exist_ok=True)
+
+        for rust_file in ["lib.rs", "main.rs"]:
+            root_file = working_dir / rust_file
+            if root_file.exists():
+                src_file = src_dir / rust_file
+                if not src_file.exists():
+                    root_file.rename(src_file)
+
+        cargo_toml = working_dir / "Cargo.toml"
+
+        if cargo_toml.exists():
+            return
+
+        cargo_content = """[package]
+name = "code_healing_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"""
+        cargo_toml.write_text(cargo_content)
+
     def test(self, input_data: CodeTesterInput) -> CodeTesterOutput:
         working_dir = Path(input_data.working_directory)
 
@@ -117,6 +156,7 @@ class CodeTesterTool:
             return CodeTesterOutput(success=False, stdout="", stderr=error_msg, exit_code=-1, command="")
 
         if input_data.language == "rust":
+            self._ensure_rust_project_structure(working_dir)
             return self._execute_in_docker(working_dir, input_data.timeout)
 
         elif input_data.language == "python":

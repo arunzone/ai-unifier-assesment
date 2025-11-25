@@ -81,7 +81,11 @@ class SelfHealingAgent:
     def _setup_working_directory_node(self, state: CodeHealingState) -> dict:
         logger.info("--- NODE: Setting up working directory ---")
 
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language}_"))
+        workspace_root = Path("/app")
+        temp_base = workspace_root / ".code_healing_temp"
+        temp_base.mkdir(exist_ok=True)
+
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language}_", dir=temp_base))
         logger.info(f"Working directory: {temp_dir}")
 
         return {"working_directory": str(temp_dir)}
@@ -150,7 +154,12 @@ class SelfHealingAgent:
             final_message = state.final_message
 
         logger.info(f"\nFinal working directory: {state.working_directory}")
-        return {"final_message": final_message}
+        return {
+            "final_message": final_message,
+            "final_code": state.current_code,
+            "working_directory": state.working_directory,
+            "attempts": state.attempt_number + 1,
+        }
 
     def _build_graph(self) -> StateGraph:
         graph = StateGraph(CodeHealingState)
@@ -191,16 +200,6 @@ class SelfHealingAgent:
         graph.add_edge("finalize", END)
 
         return graph
-
-    async def heal(self, task_description: str) -> CodeHealingState:
-        graph = self._build_graph().compile()
-
-        initial_state = self._setup_initial_state(task_description)
-
-        logger.info("Starting LangGraph execution...")
-        final_state_dict = await graph.ainvoke(initial_state)
-
-        return CodeHealingState(**final_state_dict)
 
     async def heal_stream(self, task_description: str) -> AsyncGenerator[str, None]:
         graph = self._build_graph().compile()

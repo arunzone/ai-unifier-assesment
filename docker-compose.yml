@@ -91,7 +91,7 @@ services:
     command: >
       bash -c "
         set -e &&
-        pip install -e . &&
+        pip install --timeout 300 --retries 3 --index-url https://pypi.org/simple/ -e . &&
         mkdir -p /app/data/corpus &&
         if [ ! -f /app/data/corpus/lotr-fellowship.pdf ]; then
           echo 'Downloading Lord of the Rings...' &&
@@ -106,6 +106,7 @@ services:
       dockerfile: Dockerfile.dev
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -122,7 +123,7 @@ services:
         condition: service_completed_successfully
     command: >
       bash -c "
-        pip install -e . &&
+        pip install --timeout 300 --retries 3 --index-url https://pypi.org/simple/ -e . &&
         python -m ai_unifier_assesment.benchmark --verbose --save
       "
 
@@ -143,7 +144,7 @@ services:
         condition: service_healthy
     command: >
       bash -c "
-        pip install -e . &&
+        pip install --timeout 300 --retries 3 --index-url https://pypi.org/simple/ -e . &&
         alembic upgrade head
       "
 
@@ -177,6 +178,7 @@ services:
       bash -c "pip install -e . && python -m ai_unifier_assesment"
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
 
   dashboard:
     build:
@@ -197,6 +199,7 @@ services:
       bash -c "pip install -r /app/dashboard/requirements.txt && streamlit run /app/dashboard/app.py --server.address=0.0.0.0 --server.port=8501"
     volumes:
       - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   ollama_data:

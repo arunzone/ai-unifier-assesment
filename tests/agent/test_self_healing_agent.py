@@ -1,79 +1,38 @@
-"""Tests for SelfHealingAgent."""
+"""Tests for SelfHealingAgent - one assert per test, clear and minimal."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 from assertpy import assert_that
+from langchain_core.messages import AIMessage
 
 from ai_unifier_assesment.agent.self_healing_agent import SelfHealingAgent
-from ai_unifier_assesment.agent.tools.code_tester_tool import (
-    CodeTesterOutput,
-    CodeTesterTool,
-)
-from ai_unifier_assesment.agent.tools.code_writer_tool import (
-    CodeWriterOutput,
-    CodeWriterTool,
-)
+from ai_unifier_assesment.agent.state import CodeHealingState
+from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterOutput
+from ai_unifier_assesment.agent.tools.code_writer_tool import CodeWriterOutput
 
 
 @pytest.fixture
-def mock_model():
-    """Mock LLM model."""
-    model = Mock()
-    simple_model = AsyncMock()
-    simple_model.ainvoke = AsyncMock()
-    model.simple_model.return_value = simple_model
-    return model
+def agent():
+    """Create SelfHealingAgent with mocked dependencies."""
+    mock_model = Mock()
+    mock_model.simple_model.return_value = AsyncMock()
 
+    mock_prompt_loader = Mock()
+    mock_prompt_loader.load.return_value = "System prompt"
 
-@pytest.fixture
-def mock_prompt_loader():
-    """Mock prompt loader."""
-    loader = Mock()
-    loader.load = Mock(
-        side_effect=lambda name: (
-            "System prompt content" if name == "code_healing_system" else "Fix prompt: {previous_code} {test_output}"
-        )
+    mock_code_writer = Mock()
+    mock_code_writer.write.return_value = CodeWriterOutput(success=True, file_path="/tmp/test.py", message="Written")
+
+    mock_code_tester = Mock()
+    mock_code_tester.test.return_value = CodeTesterOutput(
+        success=True, stdout="passed", stderr="", exit_code=0, command="pytest"
     )
-    return loader
 
+    mock_event_processor = Mock()
+    mock_settings = Mock()
 
-@pytest.fixture
-def mock_code_writer():
-    """Mock code writer tool."""
-    writer = Mock(spec=CodeWriterTool)
-    writer.write = Mock(
-        return_value=CodeWriterOutput(
-            success=True,
-            file_path="/tmp/test.py",
-            message="Success",
-        )
-    )
-    return writer
-
-
-@pytest.fixture
-def mock_code_tester():
-    """Mock code tester tool."""
-    tester = Mock(spec=CodeTesterTool)
-    return tester
-
-
-@pytest.fixture
-def mock_settings():
-    """Mock settings."""
-    return Mock()
-
-
-@pytest.fixture
-def mock_event_processor():
-    """Mock event processor."""
-    return Mock()
-
-
-@pytest.fixture
-def agent(mock_model, mock_prompt_loader, mock_code_writer, mock_code_tester, mock_settings, mock_event_processor):
-    """Create agent with mocked dependencies."""
     return SelfHealingAgent(
         model=mock_model,
         prompt_loader=mock_prompt_loader,
@@ -84,283 +43,392 @@ def agent(mock_model, mock_prompt_loader, mock_code_writer, mock_code_tester, mo
     )
 
 
+# Language Detection Tests
+
+
 @pytest.mark.asyncio
-async def test_successful_first_attempt(agent, mock_model, mock_code_tester):
-    """Test successful code generation on first attempt."""
-    # Mock LLM responses: first for language detection, then for code generation
-    language_response = Mock()
-    language_response.content = "python"
+async def test_should_detect_python_when_llm_returns_python(agent):
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="python")
+    state = CodeHealingState(task_description="Write fibonacci", language="", working_directory="")
 
-    code_response = Mock()
-    code_response.content = """
-FILE: main.py
-```python
-def add(a, b):
-    return a + b
-```
+    result = await agent._detect_language_node(state)
 
-FILE: test_main.py
-```python
-from main import add
+    assert_that(result).is_equal_to({"language": "python"})
 
-def test_add():
-    assert add(1, 2) == 3
-```
-"""
-    mock_model.simple_model.return_value.ainvoke.side_effect = [
-        language_response,
-        code_response,
-    ]
 
-    # Mock successful test execution
-    mock_code_tester.test = Mock(
-        return_value=CodeTesterOutput(
-            success=True,
-            stdout="All tests passed",
-            stderr="",
-            exit_code=0,
-            command="pytest",
-        )
+@pytest.mark.asyncio
+async def test_should_detect_rust_when_llm_returns_rust(agent):
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="rust")
+    state = CodeHealingState(task_description="Write fibonacci", language="", working_directory="")
+
+    result = await agent._detect_language_node(state)
+
+    assert_that(result).is_equal_to({"language": "rust"})
+
+
+@pytest.mark.asyncio
+async def test_should_default_to_python_when_llm_returns_invalid_language(agent):
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="javascript")
+    state = CodeHealingState(task_description="Write code", language="", working_directory="")
+
+    result = await agent._detect_language_node(state)
+
+    assert_that(result).is_equal_to({"language": "python"})
+
+
+@pytest.mark.asyncio
+async def test_should_default_to_python_when_llm_returns_empty_string(agent):
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="")
+    state = CodeHealingState(task_description="Write code", language="", working_directory="")
+
+    result = await agent._detect_language_node(state)
+
+    assert_that(result).is_equal_to({"language": "python"})
+
+
+# Working Directory Setup Tests
+
+
+def test_should_create_temp_directory_with_language_prefix(agent):
+    state = CodeHealingState(task_description="Test", language="python", working_directory="")
+
+    result = agent._setup_working_directory_node(state)
+
+    assert_that(result["working_directory"]).contains("code_healing_python")
+
+
+def test_should_create_existing_temp_directory(agent):
+    state = CodeHealingState(task_description="Test", language="rust", working_directory="")
+
+    result = agent._setup_working_directory_node(state)
+    working_dir = Path(result["working_directory"])
+
+    assert_that(working_dir.exists()).is_true()
+
+
+# Code Generation Tests
+
+
+@pytest.mark.asyncio
+async def test_should_generate_code_from_task_description(agent):
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="def fib(n): return n")
+    state = CodeHealingState(task_description="Write fibonacci", language="python", working_directory="/tmp")
+
+    result = await agent._generate_initial_code(state)
+
+    assert_that(result.current_code).is_equal_to("def fib(n): return n")
+
+
+@pytest.mark.asyncio
+async def test_should_fix_code_using_test_output(agent):
+    agent._prompt_loader.load.return_value = "Fix: {previous_code}\nError: {test_output}"
+    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(
+        content="def fib(n): return n if n <= 1 else fib(n-1) + fib(n-2)"
+    )
+    state = CodeHealingState(
+        task_description="Write fibonacci",
+        language="python",
+        working_directory="/tmp",
+        current_code="def fib(n): return n",
+        test_output="AssertionError: fib(5) != 5",
     )
 
-    result = await agent.heal("write an add function in Python")
+    result = await agent._fix_code(state)
 
-    assert_that(result.success).is_true()
-    assert_that(result.attempt_number).is_equal_to(0)
-    assert_that(result.final_message).contains("Success")
-    assert_that(result.language).is_equal_to("python")
+    assert_that(result.current_code).contains("fib(n-1) + fib(n-2)")
 
 
-@pytest.mark.asyncio
-async def test_failure_after_max_attempts(agent, mock_model, mock_code_tester):
-    """Test failure after exhausting max attempts."""
-    # Mock LLM responses: language detection + 3 code generation attempts
-    language_response = Mock()
-    language_response.content = "rust"
+# Code Parsing Tests
 
-    code_response = Mock()
-    code_response.content = """
-FILE: lib.rs
-```rust
-fn broken() {}
-```
-"""
-    mock_model.simple_model.return_value.ainvoke.side_effect = [
-        language_response,
-        code_response,
-        code_response,  # Retry 1
-        code_response,  # Retry 2
-    ]
 
-    # Mock failing test execution
-    mock_code_tester.test = Mock(
-        return_value=CodeTesterOutput(
-            success=False,
-            stdout="",
-            stderr="Compilation error",
-            exit_code=1,
-            command="cargo test",
-        )
+def test_should_parse_files_with_file_markers(agent):
+    code_content = (
+        "FILE: main.py\n```python\nprint('hello')\n```\n\nFILE: test_main.py\n```python\ndef test(): pass\n```"
     )
-
-    result = await agent.heal("write broken rust code")
-
-    assert_that(result.success).is_false()
-    assert_that(result.attempt_number).is_equal_to(2)  # 0, 1, 2 = 3 attempts
-    assert_that(result.final_message).contains("Failed after 3 attempts")
-    assert_that(result.language).is_equal_to("rust")
-
-
-@pytest.mark.asyncio
-async def test_successful_second_attempt(agent, mock_model, mock_code_tester):
-    """Test success on second attempt after initial failure."""
-    # Mock LLM responses: language detection + 2 code generation attempts
-    language_response = Mock()
-    language_response.content = "python"
-
-    first_code_response = Mock()
-    first_code_response.content = """
-FILE: test.py
-```python
-def broken():
-    return 1 / 0
-```
-"""
-
-    second_code_response = Mock()
-    second_code_response.content = """
-FILE: test.py
-```python
-def fixed():
-    return 42
-
-def test_fixed():
-    assert fixed() == 42
-```
-"""
-
-    mock_model.simple_model.return_value.ainvoke.side_effect = [
-        language_response,
-        first_code_response,
-        second_code_response,
-    ]
-
-    # Mock test results: fail then succeed
-    mock_code_tester.test = Mock(
-        side_effect=[
-            CodeTesterOutput(
-                success=False,
-                stdout="",
-                stderr="ZeroDivisionError",
-                exit_code=1,
-                command="pytest",
-            ),
-            CodeTesterOutput(
-                success=True,
-                stdout="1 passed",
-                stderr="",
-                exit_code=0,
-                command="pytest",
-            ),
-        ]
-    )
-
-    result = await agent.heal("write a function in Python")
-
-    assert_that(result.success).is_true()
-    assert_that(result.attempt_number).is_equal_to(1)  # Success on second attempt
-    assert_that(result.final_message).contains("Success")
-    assert_that(result.language).is_equal_to("python")
-
-
-@pytest.mark.asyncio
-async def test_parse_code_files_with_file_markers(agent):
-    """Test parsing code with FILE: markers."""
-    code_content = """
-FILE: main.py
-```python
-print("hello")
-```
-
-FILE: test_main.py
-```python
-def test_main():
-    pass
-```
-"""
 
     files = agent._parse_code_files(code_content, "python")
 
-    assert_that(files).contains_key("main.py", "test_main.py")
-    assert_that(files["main.py"]).contains('print("hello")')
-    assert_that(files["test_main.py"]).contains("def test_main")
+    assert files == {"main.py": "print('hello')", "test_main.py": "def test(): pass"}
 
 
-@pytest.mark.asyncio
-async def test_parse_code_files_fallback(agent):
-    """Test fallback parsing when FILE: markers are missing."""
-    code_content = """
-```python
-def hello():
-    return "world"
-```
-
-```python
-def test_hello():
-    assert hello() == "world"
-```
-"""
+def test_should_extract_filename_from_file_marker(agent):
+    code_content = "FILE: my_module.py\n```python\nx = 1\n```"
 
     files = agent._parse_code_files(code_content, "python")
 
-    # Should create default filenames
-    assert_that(files).is_not_empty()
-    assert_that(len(files)).is_greater_than(0)
+    assert "my_module.py" in files
 
 
-@pytest.mark.asyncio
-async def test_format_test_output(agent):
-    """Test formatting of test output."""
-    formatted = agent._format_test_output("stdout content", "stderr content")
+def test_should_fallback_parse_python_test_code(agent):
+    code_content = "```python\nimport pytest\ndef test_add(): pass\n```"
 
-    assert_that(formatted).contains("STDERR")
-    assert_that(formatted).contains("STDOUT")
-    assert_that(formatted).contains("stderr content")
-    assert_that(formatted).contains("stdout content")
+    files = agent._fallback_parse(code_content, "python")
+
+    assert files == {"test_main.py": "import pytest\ndef test_add(): pass"}
 
 
-@pytest.mark.asyncio
-async def test_format_test_output_empty(agent):
-    """Test formatting when output is empty."""
-    formatted = agent._format_test_output("", "")
+def test_should_fallback_parse_python_main_code(agent):
+    code_content = "```python\ndef add(a, b): return a + b\n```"
 
-    assert_that(formatted).contains("No output captured")
+    files = agent._fallback_parse(code_content, "python")
 
-
-@pytest.mark.asyncio
-async def test_rust_code_structure(agent):
-    """Test that Rust code goes to lib.rs."""
-    code_content = """
-```rust
-fn main() {}
-```
-"""
-
-    files = agent._parse_code_files(code_content, "rust")
-
-    assert_that(files).contains_key("lib.rs")
+    assert files == {"main.py": "def add(a, b): return a + b"}
 
 
-@pytest.mark.asyncio
-async def test_agent_loads_correct_system_prompts(agent, mock_prompt_loader):
-    """Test that agent loads the correct prompt files."""
-    language_response = Mock()
-    language_response.content = "python"
+def test_should_fallback_parse_rust_code_to_lib_rs(agent):
+    code_content = "```rust\nfn add(a: i32, b: i32) -> i32 { a + b }\n```"
 
-    llm_response = Mock()
-    llm_response.content = "FILE: test.py\n```python\npass\n```"
-    agent._model.simple_model.return_value.ainvoke.side_effect = [
-        language_response,
-        llm_response,
-    ]
+    files = agent._fallback_parse(code_content, "rust")
 
-    agent._code_tester.test = Mock(
-        return_value=CodeTesterOutput(success=True, stdout="", stderr="", exit_code=0, command="pytest")
+    assert files == {"lib.rs": "fn add(a: i32, b: i32) -> i32 { a + b }"}
+
+
+def test_should_return_empty_dict_when_no_code_blocks_found(agent):
+    code_content = "Just plain text with no code blocks"
+
+    files = agent._parse_code_files(code_content, "python")
+
+    assert files == {}
+
+
+# Test Execution Tests
+
+
+def test_should_mark_success_when_tests_pass(agent):
+    agent._code_tester.test.return_value = CodeTesterOutput(
+        success=True, stdout="All passed", stderr="", exit_code=0, command="pytest"
+    )
+    state = CodeHealingState(task_description="Test", language="python", working_directory="/tmp")
+
+    result = agent._run_tests(state)
+
+    assert result.success is True
+
+
+def test_should_mark_failure_when_tests_fail(agent):
+    agent._code_tester.test.return_value = CodeTesterOutput(
+        success=False, stdout="", stderr="AssertionError", exit_code=1, command="pytest"
+    )
+    state = CodeHealingState(task_description="Test", language="python", working_directory="/tmp")
+
+    result = agent._run_tests(state)
+
+    assert result.success is False
+
+
+def test_should_capture_test_output_from_stdout_and_stderr(agent):
+    agent._code_tester.test.return_value = CodeTesterOutput(
+        success=False, stdout="Test output", stderr="Error output", exit_code=1, command="pytest"
+    )
+    state = CodeHealingState(task_description="Test", language="python", working_directory="/tmp")
+
+    result = agent._run_tests(state)
+
+    assert "STDOUT:\nTest output" in result.test_output and "STDERR:\nError output" in result.test_output
+
+
+# Decision Logic Tests
+
+
+def test_should_decide_success_when_tests_pass(agent):
+    state = CodeHealingState(
+        task_description="Test", language="python", working_directory="/tmp", success=True, attempt_number=0
     )
 
-    await agent.heal("test task")
+    decision = agent._decide_next_step(state)
 
-    # Should be called twice: once for language detection, once for system prompt
-    assert_that(mock_prompt_loader.load.call_count).is_equal_to(2)
-    mock_prompt_loader.load.assert_any_call("language_detection")
-    mock_prompt_loader.load.assert_any_call("code_healing_system")
+    assert decision == "success"
 
 
-@pytest.mark.asyncio
-async def test_agent_uses_fix_prompt_on_retry(agent, mock_prompt_loader, mock_model):
-    """Test that agent uses fix prompt on retry attempts."""
-    language_response = Mock()
-    language_response.content = "python"
-
-    first_response = Mock()
-    first_response.content = "FILE: test.py\n```python\npass\n```"
-
-    second_response = Mock()
-    second_response.content = "FILE: test.py\n```python\nfixed\n```"
-
-    mock_model.simple_model.return_value.ainvoke.side_effect = [
-        language_response,
-        first_response,
-        second_response,
-    ]
-
-    agent._code_tester.test = Mock(
-        side_effect=[
-            CodeTesterOutput(success=False, stdout="", stderr="error", exit_code=1, command="pytest"),
-            CodeTesterOutput(success=True, stdout="", stderr="", exit_code=0, command="pytest"),
-        ]
+def test_should_decide_retry_when_tests_fail_and_attempts_remain(agent):
+    state = CodeHealingState(
+        task_description="Test", language="python", working_directory="/tmp", success=False, attempt_number=0
     )
 
-    await agent.heal("test task")
+    decision = agent._decide_next_step(state)
 
-    mock_prompt_loader.load.assert_any_call("code_healing_fix")
+    assert decision == "retry"
+
+
+def test_should_decide_failure_when_max_attempts_reached(agent):
+    state = CodeHealingState(
+        task_description="Test", language="python", working_directory="/tmp", success=False, attempt_number=2
+    )
+
+    decision = agent._decide_next_step(state)
+
+    assert decision == "failure"
+
+
+# Attempt Counter Tests
+
+
+def test_should_increment_attempt_from_zero_to_one(agent):
+    state = CodeHealingState(task_description="Test", language="python", working_directory="/tmp", attempt_number=0)
+
+    result = agent._increment_attempt_node(state)
+
+    assert result == {"attempt_number": 1}
+
+
+def test_should_increment_attempt_from_one_to_two(agent):
+    state = CodeHealingState(task_description="Test", language="python", working_directory="/tmp", attempt_number=1)
+
+    result = agent._increment_attempt_node(state)
+
+    assert result == {"attempt_number": 2}
+
+
+# Finalization Tests
+
+
+def test_should_return_success_message_on_successful_completion(agent):
+    state = CodeHealingState(
+        task_description="Test",
+        language="python",
+        working_directory="/tmp",
+        success=True,
+        final_message="Success! All tests passed on attempt 1",
+        current_code="def fib(n): return n",
+        attempt_number=0,
+    )
+
+    result = agent._finalize_node(state)
+
+    assert result["final_message"] == "Success! All tests passed on attempt 1"
+
+
+def test_should_return_failure_message_with_error_details(agent):
+    state = CodeHealingState(
+        task_description="Test",
+        language="python",
+        working_directory="/tmp",
+        success=False,
+        test_output="AssertionError: test failed",
+        attempt_number=2,
+    )
+
+    result = agent._finalize_node(state)
+
+    assert (
+        "Failed after 3 attempts" in result["final_message"]
+        and "AssertionError: test failed" in result["final_message"]
+    )
+
+
+def test_should_return_working_directory_in_finalize(agent):
+    state = CodeHealingState(
+        task_description="Test",
+        language="python",
+        working_directory="/tmp/test_dir",
+        success=True,
+        final_message="Success",
+        current_code="code",
+        attempt_number=0,
+    )
+
+    result = agent._finalize_node(state)
+
+    assert result["working_directory"] == "/tmp/test_dir"
+
+
+def test_should_return_final_code_in_finalize(agent):
+    state = CodeHealingState(
+        task_description="Test",
+        language="python",
+        working_directory="/tmp",
+        success=True,
+        final_message="Success",
+        current_code="def fib(n): return n",
+        attempt_number=0,
+    )
+
+    result = agent._finalize_node(state)
+
+    assert result["final_code"] == "def fib(n): return n"
+
+
+def test_should_return_total_attempts_in_finalize(agent):
+    state = CodeHealingState(
+        task_description="Test",
+        language="python",
+        working_directory="/tmp",
+        success=True,
+        final_message="Success",
+        current_code="code",
+        attempt_number=2,
+    )
+
+    result = agent._finalize_node(state)
+
+    assert result["attempts"] == 3
+
+
+# Test Output Formatting Tests
+
+
+def test_should_format_output_with_both_stdout_and_stderr(agent):
+    result = agent._format_test_output("stdout content", "stderr content")
+
+    assert result == "STDERR:\nstderr content\n\nSTDOUT:\nstdout content"
+
+
+def test_should_format_output_with_only_stdout(agent):
+    result = agent._format_test_output("stdout content", "")
+
+    assert result == "STDOUT:\nstdout content"
+
+
+def test_should_format_output_with_only_stderr(agent):
+    result = agent._format_test_output("", "stderr content")
+
+    assert result == "STDERR:\nstderr content"
+
+
+def test_should_return_no_output_message_when_both_empty(agent):
+    result = agent._format_test_output("", "")
+
+    assert result == "No output captured"
+
+
+# Initial State Tests
+
+
+def test_should_create_initial_state_with_task_description(agent):
+    state = agent._setup_initial_state("Write a fibonacci function")
+
+    assert state.task_description == "Write a fibonacci function"
+
+
+def test_should_create_initial_state_with_empty_language(agent):
+    state = agent._setup_initial_state("Write code")
+
+    assert state.language == ""
+
+
+def test_should_create_initial_state_with_empty_working_directory(agent):
+    state = agent._setup_initial_state("Write code")
+
+    assert state.working_directory == ""
+
+
+def test_should_create_initial_state_with_zero_attempt_number(agent):
+    state = agent._setup_initial_state("Write code")
+
+    assert state.attempt_number == 0
+
+
+def test_should_create_initial_state_with_success_false(agent):
+    state = agent._setup_initial_state("Write code")
+
+    assert state.success is False
+
+
+# Graph Building Tests
+
+
+def test_should_build_compilable_graph(agent):
+    graph = agent._build_graph()
+    compiled = graph.compile()
+
+    assert compiled is not None

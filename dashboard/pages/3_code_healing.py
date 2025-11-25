@@ -69,6 +69,7 @@ if generate_button:
     else:
         # Create containers for live updates
         status_container = st.container()
+        progress_container = st.container()
         code_container = st.container()
         results_container = st.container()
 
@@ -76,20 +77,93 @@ if generate_button:
             status_placeholder = st.empty()
             status_placeholder.info(f"🔄 Starting code generation for: {task_description}")
 
+        with progress_container:
+            st.subheader("Progress Log")
+            progress_log = st.empty()
+
         try:
-            # Call the API (language is auto-detected)
-            with st.spinner("Detecting language and generating code..."):
-                response = requests.post(
-                    f"{API_BASE_URL}/api/heal-code",
-                    json={"task_description": task_description},
-                    timeout=300,  # 5 minutes timeout for complex code generation
-                )
+            import json
+
+            final_result = {}
+            latest_code = None
+            log_messages = []
+
+            with requests.post(
+                f"{API_BASE_URL}/api/heal-code/stream",
+                json={"task_description": task_description},
+                stream=True,
+                timeout=300,
+            ) as response:
                 response.raise_for_status()
-                result = response.json()
+
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+
+                    line_str = line.decode("utf-8")
+
+                    if line_str.startswith("event: "):
+                        event_type = line_str[7:].strip()
+
+                    elif line_str.startswith("data: "):
+                        data = json.loads(line_str[6:])
+
+                        if event_type == "language_detected":
+                            msg = f"🔍 Language Detected: {data.get('language', '').upper()}"
+                            log_messages.append(msg)
+
+                        elif event_type == "workdir_setup":
+                            msg = f"📁 Working Directory: {data.get('working_directory', '')}"
+                            log_messages.append(msg)
+
+                        elif event_type == "code_generated":
+                            latest_code = data.get("code")
+                            msg = f"✍️  Code Generated: {data.get('code_length', 0)} characters"
+                            log_messages.append(msg)
+
+                        elif event_type == "code_written":
+                            msg = "💾 Code Written to Disk"
+                            log_messages.append(msg)
+
+                        elif event_type == "tests_passed":
+                            msg = f"✅ Tests Passed: {data.get('message', 'All tests passed')}"
+                            log_messages.append(msg)
+
+                        elif event_type == "tests_failed":
+                            error_preview = data.get("error_preview", "")[:100]
+                            msg = f"❌ Tests Failed: {error_preview}"
+                            log_messages.append(msg)
+
+                        elif event_type == "retry":
+                            msg = f"🔄 Retrying: Attempt {data.get('next_attempt', 0)}"
+                            log_messages.append(msg)
+
+                        elif event_type == "success":
+                            final_result = data
+                            final_result["success"] = True
+                            if not final_result.get("final_code") and latest_code:
+                                final_result["final_code"] = latest_code
+                            msg = f"🎉 SUCCESS: {data.get('message', 'Success')}"
+                            log_messages.append(msg)
+                            status_placeholder.success(f"✅ {data.get('message', 'Success')}")
+
+                        elif event_type == "failure":
+                            final_result = data
+                            final_result["success"] = False
+                            if not final_result.get("final_code") and latest_code:
+                                final_result["final_code"] = latest_code
+                            msg = f"💔 FAILURE: {data.get('message', 'Failed')}"
+                            log_messages.append(msg)
+                            status_placeholder.error(f"❌ {data.get('message', 'Failed')}")
+
+                        progress_log.code("\n".join(log_messages), language="text")
+
+            result = final_result
 
             # Display results based on success
-            if result["success"]:
-                status_placeholder.success(f"✅ {result['message']} (Attempts: {result['attempts']})")
+            if result.get("success"):
+                attempts = result.get("attempts", 1)
+                status_placeholder.success(f"✅ {result.get('message', 'Success')} (Attempts: {attempts})")
 
                 # Display final code
                 with code_container:
@@ -120,29 +194,29 @@ if generate_button:
                     st.info(f"📁 Working directory: `{result['working_directory']}`")
 
             else:
-                status_placeholder.error(f"❌ {result['message']}")
+                status_placeholder.error(f"❌ {result.get('message', 'Failed')}")
 
                 # Display final code attempt
                 with code_container:
                     st.subheader("Last Code Attempt")
-                    if result["final_code"]:
+                    if result.get("final_code"):
                         # Try to detect language from code for syntax highlighting
+                        final_code = result.get("final_code", "")
                         detected_lang = (
-                            "python"
-                            if ".py" in result.get("working_directory", "") or "def " in result["final_code"]
-                            else "rust"
+                            "python" if ".py" in result.get("working_directory", "") or "def " in final_code else "rust"
                         )
-                        st.code(result["final_code"], language=detected_lang)
+                        st.code(final_code, language=detected_lang)
                     else:
                         st.warning("No code was generated")
 
                 # Display error details
                 with results_container:
                     st.subheader("Error Details")
-                    st.error(f"Failed after {result['attempts']} attempts")
+                    attempts = result.get("attempts", 3)
+                    st.error(f"Failed after {attempts} attempts")
 
                     with st.expander("View Error Output", expanded=True):
-                        st.text(result["test_output"])
+                        st.text(result.get("test_output", "No output available"))
 
                     st.info(f"📁 Working directory: `{result['working_directory']}`")
 
