@@ -30,7 +30,7 @@
 
 **Tiktoken for Metrics**: Used tiktoken for accurate token counting rather than simple character heuristics. This enables precise cost tracking (±1% accuracy) at the expense of additional computation per request.
 
-**PostgreSQL for Metrics**: Persisted telemetry in Postgres rather than time-series DB (InfluxDB/Prometheus). Simpler operations but limited scalability for high-frequency metrics. Acceptable for assessment scope.
+**PostgreSQL for Metrics**: Persisted telemetry in Postgres rather than time-series DB (InfluxDB/Prometheus). Simpler operations but limited scalability for high-frequency metrics. Acceptable for assessment scope. Trade-off: Reused for simplicity.
 
 ## Dashboard
 

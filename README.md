@@ -137,6 +137,8 @@ export MODEL_NAME="Gpt4o"  # or "Llama31" for local Ollama
 docker-compose up --build
 ```
 
+**Note**: Have a coffee and come back in 5-10 minutes. The first run will download models and ingest data, which takes time.
+
 This single command will:
 1. ✅ Start PostgreSQL (port 5432)
 2. ✅ Start ChromaDB (port 8001)
@@ -181,30 +183,9 @@ curl -X POST http://localhost:8000/api/chat/stream \
 
 The project includes comprehensive unit and integration tests with 100% coverage requirement.
 
-### Quick Test (CI Mode)
-
 ```bash
-# Run all tests (what CI executes)
-pytest -q
-
-# Expected output:
-# ..........................................  [100%]
-# 42 passed in 5.23s
-```
-
-### Detailed Test Output
-
-```bash
-# Run with verbose output
-pytest -v
-
-# Run with coverage report
-pytest --cov=ai_unifier_assesment --cov-report=term-missing
-
-# Run specific test suites
-pytest tests/rag/              # RAG tests only
-pytest tests/agent/            # Agent tests only
-pytest tests/evaluation/       # Evaluation tests only
+# Launch working environment
+docker-compose -f docker-compose.dev.yml run --rm app bash
 ```
 
 ### Full Quality Gate (Tox)
@@ -230,16 +211,6 @@ tox
 tox -e watch
 ```
 
-### Test Coverage
-
-Current test coverage: **100%**
-
-```bash
-# Generate HTML coverage report
-pytest --cov=ai_unifier_assesment --cov-report=html
-open htmlcov/index.html
-```
-
 ## Task Implementations
 
 ### Task 3.1: Conversational Core ✅
@@ -251,6 +222,7 @@ open htmlcov/index.html
 - **Metrics:** tiktoken for token counting, cost calculation per model
 
 **Test:**
+Feel free to use Dashboard -> chat UI
 ```bash
 curl -X POST http://localhost:8000/api/chat/stream \
   -H "Content-Type: application/json" \
@@ -281,19 +253,20 @@ curl -X POST http://localhost:8000/api/chat/stream \
 - **Latency:** Median retrieval < 300ms (warm cache, measured on benchmark)
 
 **Ingestion:**
+Attempt to auto-download document and ingest it automatically on startup, or run manually:
+Feel free to add more documents in docker-compose.yml (ingestion > command)
 ```bash
 # Automatic on docker-compose up, or manual:
 docker-compose up ingestion
-
-# Or locally:
-python -m ai_unifier_assesment.ingest --directory data/corpus
 ```
 
 **Query API:**
 ```bash
-curl -X POST http://localhost:8000/api/rag/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Who are the members of the fellowship?", "top_k": 5}'
+curl --location 'http://localhost:8000/rag/qa' \
+--header 'Content-Type: application/json' \
+--data '{
+    "question": "Who are the members of the fellowship?"
+}'
 
 # Response includes:
 # - answer: Generated text with inline citations
@@ -304,7 +277,7 @@ curl -X POST http://localhost:8000/api/rag/query \
 **Benchmark:**
 ```bash
 # Automatic on docker-compose up, or manual:
-python -m ai_unifier_assesment.benchmark --verbose --save
+docker-compose up benchmark
 
 # Output:
 # RAG RETRIEVAL BENCHMARK REPORT
@@ -333,11 +306,9 @@ python -m ai_unifier_assesment.benchmark --verbose --save
 
 **API Test:**
 ```bash
-curl -X POST http://localhost:8000/api/plan-trip \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Plan a 2-day trip to Auckland for under NZ$500, departing on 2025-06-01"
-  }'
+curl --location 'http://localhost:8000/api/plan-trip' \
+--header 'Content-Type: application/json' \
+--data '{"prompt": "Plan a 2-day trip to Auckland for under NZ$500"}'
 
 # Response:
 {
@@ -377,12 +348,12 @@ curl -X POST http://localhost:8000/api/plan-trip \
 
 **API Test:**
 ```bash
-curl -X POST http://localhost:8000/api/code-healing/stream \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task": "Write a function to check if a number is prime, with tests"
-  }' \
-  --no-buffer
+curl --location 'http://localhost:8000/api/heal-code/stream' \
+--header 'Content-Type: application/json' \
+--data '{
+    "task_description": "write mergesort in rust"
+}' \
+--no-buffer
 
 # Streaming output:
 # event: node
@@ -399,8 +370,8 @@ curl -X POST http://localhost:8000/api/code-healing/stream \
 ```
 
 **Test Execution:**
-- **Python:** Runs `docker run --rm -v {workdir}:/code python:3.12 bash -c "cd /code && pip install pytest && pytest -v"`
-- **Rust:** Runs `docker run --rm -v {workdir}:/code rust:1.83 bash -c "cd /code && cargo test"`
+- **Python:** Runs in current environment for simplicity (using pytest)
+- **Rust:** Runs in a separate container using Docker (using cargo test)
 
 **Key Files:**
 - `src/ai_unifier_assesment/agent/self_healing_agent.py` - LangGraph state machine
@@ -428,116 +399,22 @@ curl -X POST http://localhost:8000/api/code-healing/stream \
 - `/chat-analytics` - Chat session deep-dive
 - `/benchmark-results` - RAG evaluation history
 
-## API Documentation
-
-### Interactive Docs
-http://localhost:8000/docs (Swagger UI)
-
-### Chat Endpoints
-
-#### POST `/api/chat/stream`
-Stream chat response with token-level updates and metrics.
-
-**Request:**
-```json
-{
-  "message": "What is the fellowship of the ring?",
-  "session_id": "user-123"
-}
-```
-
-**Response:** SSE stream
-```
-data: The
-data:  fellowship
-data:  of
-data:  the
-data:  ring
-...
-event: stats
-data: {"prompt_tokens": 15, "completion_tokens": 87, "cost": 0.00023, "latency_ms": 1245}
-```
-
-### RAG Endpoints
-
-#### POST `/api/rag/query`
-Query documents with RAG and inline citations.
-
-**Request:**
-```json
-{
-  "query": "Who is Gandalf?",
-  "top_k": 5
-}
-```
-
-**Response:**
-```json
-{
-  "answer": "Gandalf is a wizard [1] who guides the fellowship...",
-  "sources": [
-    {"content": "...", "metadata": {...}, "citation_id": 1}
-  ],
-  "retrieval_time_ms": 87
-}
-```
-
-### Agent Endpoints
-
-#### POST `/api/plan-trip`
-Generate trip itinerary with budget/date constraints.
-
-**Request:**
-```json
-{
-  "prompt": "Plan a 2-day trip to Auckland for under NZ$500"
-}
-```
-
-#### POST `/api/code-healing/stream`
-Generate and self-heal code with automated tests.
-
-**Request:**
-```json
-{
-  "task": "Write quicksort in Rust with unit tests"
-}
-```
-
-### Metrics Endpoints
-
-#### GET `/api/metrics/chat-stats`
-Get aggregated chat statistics.
-
-#### GET `/api/metrics/benchmark-results`
-Get RAG evaluation history.
-
 ## Development
 
 ### Local Development Setup
 
 ```bash
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# Launch developer environment
+docker-compose -f docker-compose.dev.yml run --rm app bash
 
-# Install with dev dependencies
-pip install -e ".[testing]"
+# Run tests with watch mode
+tox -e watch
 
-# Run services (requires Docker)
-docker-compose up postgres chroma ollama
+# Run specific test suite
+tox -e pytest -- tests/agent/
 
-# Set env vars for local development
-export CHROMA_HOST=localhost
-export CHROMA_PORT=8001
-export POSTGRES_HOST=localhost
-export OLLAMA_BASE_URL=http://localhost:11434
-
-# Run application locally
-python -m ai_unifier_assesment
-
-# Run tests
-pytest
+# Run app - hot reload on code changes
+docker-compose up
 ```
 
 ### Code Quality
@@ -549,12 +426,6 @@ tox -e format
 # Run all quality checks
 tox
 
-# Individual checks
-ruff check .              # Linting
-ruff format --check .     # Format checking
-mypy src                  # Type checking
-bandit -r src             # Security scan
-pytest --cov             # Tests with coverage
 ```
 
 ### Database Migrations
@@ -668,22 +539,10 @@ docker-compose logs postgres
 # Reset database:
 docker-compose down -v  # WARNING: Deletes all data
 docker-compose up -d postgres
-```
 
-### Tests Failing
-```bash
-# Check Python version (requires 3.12+)
-python --version
-
-# Reinstall dependencies
-pip install -e ".[testing]"
-
-# Run individual test file
-pytest tests/test_config.py -v
-
-# Check test database
-export POSTGRES_HOST=localhost
-pytest tests/rag/test_qa_service.py -v
+# Connect to running database
+docker exec -it postgres bash
+psql -U rag_user -d rag_evaluation
 ```
 
 ### Code Healing Docker Timeout

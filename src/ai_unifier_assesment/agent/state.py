@@ -7,8 +7,6 @@ from pydantic import BaseModel, Field
 
 
 class TripConstraints(BaseModel):
-    """Constraints extracted from user prompt."""
-
     destination: str
     duration_days: int
     budget: float
@@ -17,8 +15,6 @@ class TripConstraints(BaseModel):
 
 
 class FlightOption(BaseModel):
-    """Flight search result."""
-
     airline: str
     departure_time: str
     arrival_time: str
@@ -27,8 +23,6 @@ class FlightOption(BaseModel):
 
 
 class WeatherInfo(BaseModel):
-    """Weather forecast for a day."""
-
     date: str
     condition: str
     temperature_high: float
@@ -37,8 +31,6 @@ class WeatherInfo(BaseModel):
 
 
 class Attraction(BaseModel):
-    """Attraction or activity."""
-
     name: str
     description: str
     category: str
@@ -48,8 +40,6 @@ class Attraction(BaseModel):
 
 
 class Activity(BaseModel):
-    """Planned activity in itinerary."""
-
     time: str
     name: str
     description: str
@@ -58,8 +48,6 @@ class Activity(BaseModel):
 
 
 class DayPlan(BaseModel):
-    """Plan for a single day."""
-
     day: int
     date: str
     weather: WeatherInfo
@@ -68,8 +56,6 @@ class DayPlan(BaseModel):
 
 
 class TripItinerary(BaseModel):
-    """Final trip itinerary output."""
-
     destination: str
     duration_days: int
     total_budget: float
@@ -80,8 +66,6 @@ class TripItinerary(BaseModel):
 
 
 class TripPlannerState(BaseModel):
-    """State for the trip planner agent."""
-
     messages: Annotated[list[AnyMessage], add_messages]
     constraints: Optional[TripConstraints] = None
     flight_options: list[FlightOption] = Field(default_factory=list)
@@ -94,8 +78,6 @@ class TripPlannerState(BaseModel):
 
 
 class CodeHealingState(BaseModel):
-    """State for the self-healing code assistant agent."""
-
     task_description: str = Field(description="Natural language coding task")
     language: str = Field(description="Programming language (python or rust)")
     working_directory: str = Field(description="Directory for code and tests")
