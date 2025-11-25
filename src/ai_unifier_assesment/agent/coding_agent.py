@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from ai_unifier_assesment.agent.code_healing_event_processor import CodeHealingEventProcessor
+from ai_unifier_assesment.agent.language_detector import LanguageDetector
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterTool
 from ai_unifier_assesment.agent.tools.code_writer_tool import (
@@ -33,6 +34,7 @@ class CodingAgent:
         code_writer: Annotated[CodeWriterTool, Depends(CodeWriterTool)],
         code_tester: Annotated[CodeTesterTool, Depends(CodeTesterTool)],
         event_processor: Annotated[CodeHealingEventProcessor, Depends(CodeHealingEventProcessor)],
+        language_detector: Annotated[LanguageDetector, Depends(LanguageDetector)],
         settings: Annotated[object, Depends(get_settings)],
     ):
         self._model = model
@@ -40,41 +42,11 @@ class CodingAgent:
         self._code_writer = code_writer
         self._code_tester = code_tester
         self._event_processor = event_processor
+        self._language_detector = language_detector
         self._settings = settings
 
     async def _detect_language_node(self, state: CodeHealingState) -> dict:
-        logger.info("--- NODE: Detecting programming language ---")
-
-        language_prompt = self._prompt_loader.load("language_detection")
-
-        messages = [
-            SystemMessage(content=language_prompt),
-            HumanMessage(content=f"Task: {state.task_description}"),
-        ]
-
-        llm = self._model.simple_model()
-        response = await llm.ainvoke(messages)
-
-        # Extract language from response (should be just "python" or "rust")
-        detected_language = response.content.strip().lower()
-
-        # Validate the response
-        if detected_language not in ["python", "rust"]:
-            logger.warning(f"LLM returned invalid language '{detected_language}', defaulting to python")
-            detected_language = "python"
-
-        logger.info(f"✓ Language detected by LLM: {detected_language}")
-
-        return {"language": detected_language}
-
-    def _setup_initial_state(self, task_description: str) -> CodeHealingState:
-        logger.info(f"Starting coding agent for task: {task_description}")
-
-        return CodeHealingState(
-            task_description=task_description,
-            language="",  # Will be set by detect_language node
-            working_directory="",  # Will be set after language detection
-        )
+        return await self._language_detector.detect_language(state)
 
     def _setup_working_directory_node(self, state: CodeHealingState) -> dict:
         logger.info("--- NODE: Setting up working directory ---")
@@ -83,7 +55,7 @@ class CodingAgent:
         temp_base = workspace_root / ".code_healing_temp"
         temp_base.mkdir(exist_ok=True)
 
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language}_", dir=temp_base))
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language.value}_", dir=temp_base))
         logger.info(f"Working directory: {temp_dir}")
 
         return {"working_directory": str(temp_dir)}
@@ -201,7 +173,7 @@ class CodingAgent:
 
     async def code_stream(self, task_description: str) -> AsyncGenerator[str, None]:
         graph = self._build_graph().compile()
-        initial_state = self._setup_initial_state(task_description)
+        initial_state = CodeHealingState(task_description=task_description)
 
         logger.info("Starting LangGraph streaming execution...")
 
@@ -216,7 +188,7 @@ class CodingAgent:
 
         messages = [
             SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Task: {state.task_description}\nLanguage: {state.language}"),
+            HumanMessage(content=f"Task: {state.task_description}\nLanguage: {state.language.value}"),
         ]
 
         llm = self._model.simple_model()
@@ -250,7 +222,7 @@ class CodingAgent:
     def _write_code_to_disk(self, state: CodeHealingState) -> CodeHealingState:
         logger.info("Writing code to disk...")
 
-        files = self._parse_code_files(state.current_code, state.language)
+        files = self._parse_code_files(state.current_code, state.language.value)
 
         if not files:
             logger.error("No files found in generated code")
@@ -263,7 +235,7 @@ class CodingAgent:
             write_input = CodeWriterInput(
                 code=content,
                 file_path=str(file_path),
-                language=state.language,
+                language=state.language.value,
             )
 
             result = self._code_writer.write(write_input)
@@ -280,7 +252,7 @@ class CodingAgent:
 
         test_input = CodeTesterInput(
             working_directory=state.working_directory,
-            language=state.language,
+            language=state.language.value,
             timeout=30,
         )
 

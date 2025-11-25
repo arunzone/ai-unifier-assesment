@@ -13,9 +13,7 @@ You are a programming language detection expert. Analyze the given task descript
 4. If unclear, default to Python as it's more commonly used for general tasks
 
 **Response Format:**
-Respond with ONLY the language name in lowercase. No explanation, no additional text.
-
-Valid responses: "python" or "rust"
+Respond with ONLY the language name in lowercase.
 
 **Examples:**
 

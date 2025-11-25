@@ -5,6 +5,8 @@ from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
+from ai_unifier_assesment.agent.language import Language
+
 
 class TripConstraints(BaseModel):
     destination: str
@@ -79,8 +81,8 @@ class TripPlannerState(BaseModel):
 
 class CodeHealingState(BaseModel):
     task_description: str = Field(description="Natural language coding task")
-    language: str = Field(description="Programming language (python or rust)")
-    working_directory: str = Field(description="Directory for code and tests")
+    language: Language = Field(default=Language.PYTHON, description="Programming language (python or rust)")
+    working_directory: str = Field(default="", description="Directory for code and tests")
     current_code: Optional[str] = Field(default=None, description="Current version of the code")
     test_output: Optional[str] = Field(default=None, description="Output from test execution")
     attempt_number: int = Field(default=0, description="Current attempt number (0-2)")
