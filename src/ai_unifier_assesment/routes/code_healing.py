@@ -1,7 +1,7 @@
 """Code healing API endpoints."""
 
 import logging
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -17,10 +17,9 @@ class CodeHealingRequest(BaseModel):
     """Request to generate and heal code."""
 
     task_description: str = Field(
-        description="Natural language description of the coding task",
+        description="Natural language description of the coding task. Language will be auto-detected.",
         examples=["write quicksort in Rust", "implement binary search in Python"],
     )
-    language: Literal["python", "rust"] = Field(description="Programming language to generate code in")
 
 
 class CodeHealingResponse(BaseModel):
@@ -42,26 +41,27 @@ async def heal_code(
     """Generate and self-heal code based on natural language description.
 
     This endpoint:
-    1. Generates code from the task description
-    2. Writes code to disk and runs tests
-    3. Iteratively fixes errors until tests pass or max attempts reached
-    4. Returns the final code and status
+    1. Auto-detects programming language from task description
+    2. Generates code from the task description
+    3. Writes code to disk and runs tests
+    4. Iteratively fixes errors until tests pass or max attempts reached
+    5. Returns the final code and status
 
     Args:
-        request: Contains task description and language
+        request: Contains task description (language is auto-detected)
         agent: Self-healing agent instance
 
     Returns:
         CodeHealingResponse with final code and status
 
     Raises:
-        HTTPException: If invalid language or processing error occurs
+        HTTPException: If processing error occurs
     """
     try:
-        logger.info(f"Received code healing request: {request.task_description} ({request.language})")
+        logger.info(f"Received code healing request: {request.task_description}")
 
-        # Execute the self-healing loop
-        final_state = await agent.heal(request.task_description, request.language)
+        # Execute the self-healing loop (language auto-detected)
+        final_state = await agent.heal(request.task_description)
 
         return CodeHealingResponse(
             success=final_state.success,

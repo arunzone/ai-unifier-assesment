@@ -28,11 +28,11 @@ def client(mock_agent):
 
 @pytest.mark.asyncio
 async def test_heal_code_success(client, mock_agent):
-    """Test successful code healing endpoint."""
+    """Test successful code healing endpoint with auto-detected language."""
     # Mock successful healing
     mock_state = CodeHealingState(
         task_description="write quicksort",
-        language="python",
+        language="python",  # Auto-detected by agent
         working_directory="/tmp/test",
         current_code="def quicksort(arr): pass",
         test_output="All tests passed",
@@ -47,7 +47,7 @@ async def test_heal_code_success(client, mock_agent):
         "/api/heal-code",
         json={
             "task_description": "write quicksort in Python",
-            "language": "python",
+            # Language is auto-detected, not provided
         },
     )
 
@@ -61,11 +61,11 @@ async def test_heal_code_success(client, mock_agent):
 
 @pytest.mark.asyncio
 async def test_heal_code_failure(client, mock_agent):
-    """Test failed code healing endpoint."""
+    """Test failed code healing endpoint with auto-detected language."""
     # Mock failed healing
     mock_state = CodeHealingState(
         task_description="write broken code",
-        language="rust",
+        language="rust",  # Auto-detected by agent
         working_directory="/tmp/test",
         current_code="fn broken() {}",
         test_output="Compilation failed",
@@ -79,8 +79,8 @@ async def test_heal_code_failure(client, mock_agent):
     response = client.post(
         "/api/heal-code",
         json={
-            "task_description": "write broken code",
-            "language": "rust",
+            "task_description": "write broken code in Rust",
+            # Language is auto-detected, not provided
         },
     )
 
@@ -92,31 +92,16 @@ async def test_heal_code_failure(client, mock_agent):
 
 
 @pytest.mark.asyncio
-async def test_heal_code_invalid_language(client):
-    """Test with invalid language."""
-    response = client.post(
-        "/api/heal-code",
-        json={
-            "task_description": "write code",
-            "language": "javascript",  # Not supported
-        },
-    )
-
-    # Should fail validation
-    assert_that(response.status_code).is_equal_to(422)
-
-
-@pytest.mark.asyncio
 async def test_heal_code_missing_fields(client):
     """Test with missing required fields."""
     response = client.post(
         "/api/heal-code",
         json={
-            "task_description": "write code",
-            # Missing language field
+            # Missing task_description field
         },
     )
 
+    # Should fail validation
     assert_that(response.status_code).is_equal_to(422)
 
 
@@ -146,7 +131,6 @@ async def test_heal_code_python_language(client, mock_agent):
     mock_agent.heal.assert_called_once()
     call_args = mock_agent.heal.call_args[0]
     assert_that(call_args[0]).is_equal_to("write binary search")
-    assert_that(call_args[1]).is_equal_to("python")
 
 
 @pytest.mark.asyncio
@@ -173,7 +157,8 @@ async def test_heal_code_rust_language(client, mock_agent):
     assert_that(response.status_code).is_equal_to(200)
     mock_agent.heal.assert_called_once()
     call_args = mock_agent.heal.call_args[0]
-    assert_that(call_args[1]).is_equal_to("rust")
+    assert_that(call_args[0]).is_equal_to("write quicksort in Rust")
+    # Language is auto-detected, not passed as argument
 
 
 @pytest.mark.asyncio

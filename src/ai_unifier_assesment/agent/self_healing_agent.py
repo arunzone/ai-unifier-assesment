@@ -1,20 +1,12 @@
-"""Self-Healing Code Generation Agent.
-
-This agent implements a self-correcting loop that:
-1. Generates code from natural language descriptions
-2. Writes code to disk and runs tests
-3. Captures errors and iteratively fixes the code
-4. Stops after success or 3 attempts
-"""
-
 import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, StateGraph
 
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_tester_tool import (
@@ -33,13 +25,6 @@ logger = logging.getLogger(__name__)
 
 
 class SelfHealingAgent:
-    """Self-healing code generation agent with iterative error correction.
-
-    This agent orchestrates the code generation, testing, and self-healing loop.
-    It uses LLM to generate code, writes it to disk, runs tests, and iteratively
-    fixes errors until all tests pass or max attempts are reached.
-    """
-
     MAX_ATTEMPTS = 3
 
     def __init__(
@@ -50,182 +35,272 @@ class SelfHealingAgent:
         code_tester: Annotated[CodeTesterTool, Depends(CodeTesterTool)],
         settings: Annotated[object, Depends(get_settings)],
     ):
-        """Initialize the self-healing agent.
-
-        Args:
-            model: LLM model provider
-            prompt_loader: Loads system prompts from disk
-            code_writer: Tool for writing code to disk
-            code_tester: Tool for running tests
-            settings: Application settings
-        """
         self._model = model
         self._prompt_loader = prompt_loader
         self._code_writer = code_writer
         self._code_tester = code_tester
         self._settings = settings
 
-    def _setup_initial_state(self, task_description: str, language: str) -> CodeHealingState:
-        """Setup initial state and working directory."""
+    async def _detect_language_node(self, state: CodeHealingState) -> dict:
+        """
+        LangGraph Node: Uses LLM to detect programming language from task description.
+
+        This is the first node in the graph that analyzes the task and determines
+        whether to generate Python or Rust code.
+        """
+        logger.info("--- NODE: Detecting programming language ---")
+
+        language_prompt = self._prompt_loader.load("language_detection")
+
+        messages = [
+            SystemMessage(content=language_prompt),
+            HumanMessage(content=f"Task: {state.task_description}"),
+        ]
+
+        llm = self._model.simple_model()
+        response = await llm.ainvoke(messages)
+
+        # Extract language from response (should be just "python" or "rust")
+        detected_language = response.content.strip().lower()
+
+        # Validate the response
+        if detected_language not in ["python", "rust"]:
+            logger.warning(f"LLM returned invalid language '{detected_language}', defaulting to python")
+            detected_language = "python"
+
+        logger.info(f"✓ Language detected by LLM: {detected_language}")
+
+        return {"language": detected_language}
+
+    def _setup_initial_state(self, task_description: str) -> CodeHealingState:
+        """
+        Initialize the state with task details.
+
+        Note: Language and working directory will be set by the graph nodes.
+        Language is detected by the LLM in the detect_language node.
+        Working directory is created after language is known.
+        """
         logger.info(f"Starting self-healing agent for task: {task_description}")
-        logger.info(f"Language: {language}")
 
-        # Create temporary working directory
-        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{language}_"))
-        logger.info(f"Working directory: {temp_dir}")
-
-        # Initialize state
         return CodeHealingState(
             task_description=task_description,
-            language=language,
-            working_directory=str(temp_dir),
+            language="",  # Will be set by detect_language node
+            working_directory="",  # Will be set after language detection
         )
 
-    async def _execute_attempt(self, state: CodeHealingState, attempt: int) -> CodeHealingState:
-        """Execute a single healing attempt."""
-        state.attempt_number = attempt
+    def _setup_working_directory_node(self, state: CodeHealingState) -> dict:
+        """
+        LangGraph Node: Creates working directory after language is detected.
+        """
+        logger.info("--- NODE: Setting up working directory ---")
+
+        temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language}_"))
+        logger.info(f"Working directory: {temp_dir}")
+
+        return {"working_directory": str(temp_dir)}
+
+    async def _code_generator_router_node(self, state: CodeHealingState) -> dict:
         logger.info(f"\n{'=' * 60}")
-        logger.info(f"ATTEMPT {attempt + 1} / {self.MAX_ATTEMPTS}")
+        logger.info(f"ATTEMPT {state.attempt_number + 1} / {self.MAX_ATTEMPTS}")
         logger.info(f"{'=' * 60}")
 
-        if attempt == 0:
-            # First attempt: Generate initial code
-            state = await self._generate_initial_code(state)
+        if state.attempt_number == 0:
+            updated_state = await self._generate_initial_code(state)
         else:
-            # Subsequent attempts: Fix code based on errors
-            state = await self._fix_code(state)
+            updated_state = await self._fix_code(state)
 
-        if not state.current_code:
-            state.final_message = f"Failed to generate code on attempt {attempt + 1}"
-            logger.error(state.final_message)
-            return state
+        if not updated_state.current_code:
+            updated_state.final_message = f"Failed to generate code on attempt {state.attempt_number + 1}"
+            logger.error(updated_state.final_message)
 
-        # Write code to disk
-        state = self._write_code_to_disk(state)
+        return {"current_code": updated_state.current_code, "final_message": updated_state.final_message}
 
-        # Run tests
-        state = self._run_tests(state)
+    def _write_code_node(self, state: CodeHealingState) -> dict:
+        logger.info("--- NODE: Writing code to disk ---")
+        self._write_code_to_disk(state)
+        return {}  # No state updates needed, _write_code_to_disk modifies state in place
 
-        # Check if tests passed
+    def _run_tests_node(self, state: CodeHealingState) -> dict:
+        logger.info("--- NODE: Running tests ---")
+        updated_state = self._run_tests(state)
+
+        if updated_state.success:
+            updated_state.final_message = f"Success! All tests passed on attempt {state.attempt_number + 1}"
+            logger.info(f"✓ {updated_state.final_message}")
+        else:
+            logger.warning(f"✗ Tests failed on attempt {state.attempt_number + 1}")
+
+        return {
+            "success": updated_state.success,
+            "test_output": updated_state.test_output,
+            "final_message": updated_state.final_message,
+        }
+
+    def _decide_next_step(self, state: CodeHealingState) -> Literal["retry", "success", "failure"]:
         if state.success:
-            state.final_message = f"Success! All tests passed on attempt {attempt + 1}"
-            logger.info(f"✓ {state.final_message}")
+            logger.info("--- DECISION: Tests passed! Ending with SUCCESS ---")
+            return "success"
+        elif state.attempt_number < self.MAX_ATTEMPTS - 1:
+            logger.warning(
+                f"--- DECISION: Tests failed. Retrying (attempt {state.attempt_number + 2}/{self.MAX_ATTEMPTS}) ---"
+            )
+            return "retry"
         else:
-            logger.warning(f"✗ Tests failed on attempt {attempt + 1}")
+            logger.error(f"--- DECISION: Max attempts ({self.MAX_ATTEMPTS}) reached. Ending with FAILURE ---")
+            return "failure"
 
-        return state
+    def _increment_attempt_node(self, state: CodeHealingState) -> dict:
+        new_attempt = state.attempt_number + 1
+        logger.info(f"--- NODE: Incrementing attempt counter to {new_attempt} ---")
+        return {"attempt_number": new_attempt}
 
-    def _finalize_state(self, state: CodeHealingState) -> CodeHealingState:
-        """Finalize state after all attempts."""
+    def _finalize_node(self, state: CodeHealingState) -> dict:
+        logger.info("--- NODE: Finalizing state ---")
         if not state.success:
-            state.final_message = f"Failed after {self.MAX_ATTEMPTS} attempts. Last error:\n{state.test_output}"
-            logger.error(state.final_message)
+            final_message = f"Failed after {self.MAX_ATTEMPTS} attempts. Last error:\n{state.test_output}"
+            logger.error(final_message)
+        else:
+            final_message = state.final_message
 
         logger.info(f"\nFinal working directory: {state.working_directory}")
-        return state
+        return {"final_message": final_message}
 
-    async def heal(self, task_description: str, language: str) -> CodeHealingState:
-        """Execute the self-healing code generation loop.
+    def _build_graph(self) -> StateGraph:
+        """
+        Builds the LangGraph workflow for self-healing code generation.
+
+        Graph structure:
+        START -> detect_language -> setup_workdir -> code_generator -> write_code -> run_tests -> [decision]
+                                                                                                      |
+                                                      +-----------------------------------------------+
+                                                      |                    |                          |
+                                                    retry              success                    failure
+                                                      |                    |                          |
+                                                      v                    v                          v
+                                                increment_attempt      finalize                   finalize
+                                                      |                    |                          |
+                                                      +-> code_generator   +-> END                    +-> END
+        """
+        graph = StateGraph(CodeHealingState)
+
+        # Add nodes
+        graph.add_node("detect_language", self._detect_language_node)
+        graph.add_node("setup_workdir", self._setup_working_directory_node)
+        graph.add_node("code_generator", self._code_generator_router_node)
+        graph.add_node("write_code", self._write_code_node)
+        graph.add_node("run_tests", self._run_tests_node)
+        graph.add_node("increment_attempt", self._increment_attempt_node)
+        graph.add_node("finalize", self._finalize_node)
+
+        # Set entry point - start with language detection
+        graph.set_entry_point("detect_language")
+
+        # Define edges
+        graph.add_edge("detect_language", "setup_workdir")
+        graph.add_edge("setup_workdir", "code_generator")
+        graph.add_edge("code_generator", "write_code")
+        graph.add_edge("write_code", "run_tests")
+
+        # Conditional edge after tests
+        graph.add_conditional_edges(
+            "run_tests",
+            self._decide_next_step,
+            {
+                "retry": "increment_attempt",
+                "success": "finalize",
+                "failure": "finalize",
+            },
+        )
+
+        # Loop back to code generator after incrementing attempt
+        graph.add_edge("increment_attempt", "code_generator")
+
+        # End after finalization
+        graph.add_edge("finalize", END)
+
+        return graph
+
+    async def heal(self, task_description: str) -> CodeHealingState:
+        """
+        Execute the self-healing code generation workflow using LangGraph.
+
+        This method uses a LangGraph state machine instead of an imperative loop.
+        The graph handles the retry logic, state transitions, and decision-making.
+
+        The workflow:
+        1. LLM detects programming language from task description
+        2. Sets up working directory
+        3. Generates code (or fixes it on retry)
+        4. Writes code to disk
+        5. Runs tests
+        6. Decides whether to retry, succeed, or fail
 
         Args:
-            task_description: Natural language description of coding task
-            language: Programming language ('python' or 'rust')
+            task_description: Natural language description of the coding task.
+                             Language will be auto-detected by the LLM.
 
         Returns:
-            Final state with code, test results, and success status
+            CodeHealingState with the final result
         """
-        state = self._setup_initial_state(task_description, language)
+        # Build and compile the graph
+        graph = self._build_graph().compile()
 
-        # Main self-healing loop
-        for attempt in range(self.MAX_ATTEMPTS):
-            state = await self._execute_attempt(state, attempt)
-            if state.success:
-                break
+        # Setup initial state (language will be detected by the graph)
+        initial_state = self._setup_initial_state(task_description)
 
-        return self._finalize_state(state)
+        # Execute the graph
+        logger.info("Starting LangGraph execution...")
+        final_state_dict = await graph.ainvoke(initial_state)
+
+        return CodeHealingState(**final_state_dict)
 
     async def _generate_initial_code(self, state: CodeHealingState) -> CodeHealingState:
-        """Generate initial code from task description.
-
-        Args:
-            state: Current state
-
-        Returns:
-            Updated state with generated code
-        """
         logger.info("Generating initial code...")
 
-        # Load system prompt
         system_prompt = self._prompt_loader.load("code_healing_system")
 
-        # Create messages
         messages = [
             SystemMessage(content=system_prompt),
             HumanMessage(content=f"Task: {state.task_description}\nLanguage: {state.language}"),
         ]
 
-        # Generate code
         llm = self._model.simple_model()
         response = await llm.ainvoke(messages)
 
-        # Extract code from response
         state.current_code = response.content
         logger.info(f"Generated {len(state.current_code)} characters of code")
 
         return state
 
     async def _fix_code(self, state: CodeHealingState) -> CodeHealingState:
-        """Fix code based on previous test errors.
-
-        Args:
-            state: Current state with previous code and errors
-
-        Returns:
-            Updated state with fixed code
-        """
         logger.info("Fixing code based on errors...")
 
-        # Load fix prompt template
         fix_prompt_template = self._prompt_loader.load("code_healing_fix")
 
-        # Fill in template
         fix_prompt = fix_prompt_template.format(
             previous_code=state.current_code,
             test_output=state.test_output,
         )
 
-        # Create messages (no system prompt on fixes, just the fix instructions)
         messages = [HumanMessage(content=fix_prompt)]
 
-        # Generate fixed code
         llm = self._model.simple_model()
         response = await llm.ainvoke(messages)
 
-        # Extract code from response
         state.current_code = response.content
         logger.info(f"Generated {len(state.current_code)} characters of fixed code")
 
         return state
 
     def _write_code_to_disk(self, state: CodeHealingState) -> CodeHealingState:
-        """Parse generated code and write files to disk.
-
-        Args:
-            state: Current state with generated code
-
-        Returns:
-            Updated state (unchanged, writes are side effects)
-        """
         logger.info("Writing code to disk...")
 
-        # Parse the code response to extract files
         files = self._parse_code_files(state.current_code, state.language)
 
         if not files:
             logger.error("No files found in generated code")
             return state
 
-        # Write each file
         for filename, content in files.items():
             file_path = Path(state.working_directory) / filename
             logger.info(f"Writing {filename} ({len(content)} chars)")
@@ -246,14 +321,6 @@ class SelfHealingAgent:
         return state
 
     def _run_tests(self, state: CodeHealingState) -> CodeHealingState:
-        """Run tests and capture output.
-
-        Args:
-            state: Current state
-
-        Returns:
-            Updated state with test results
-        """
         logger.info("Running tests...")
 
         test_input = CodeTesterInput(
@@ -264,7 +331,6 @@ class SelfHealingAgent:
 
         result = self._code_tester.test(test_input)
 
-        # Update state with results
         state.success = result.success
         state.test_output = self._format_test_output(result.stdout, result.stderr)
 
@@ -279,24 +345,8 @@ class SelfHealingAgent:
         return state
 
     def _parse_code_files(self, code_content: str, language: str) -> dict[str, str]:
-        """Parse LLM response to extract file contents.
-
-        Expected format:
-        FILE: filename.ext
-        ```language
-        code content
-        ```
-
-        Args:
-            code_content: Raw LLM response
-            language: Programming language
-
-        Returns:
-            Dictionary mapping filenames to their contents
-        """
         files = {}
 
-        # Pattern to match FILE: filename followed by code block
         pattern = r"FILE:\s*(\S+)\s*```(?:\w+)?\s*\n(.*?)```"
 
         matches = re.finditer(pattern, code_content, re.DOTALL)
@@ -307,7 +357,6 @@ class SelfHealingAgent:
             files[filename] = content
             logger.info(f"Parsed file: {filename} ({len(content)} chars)")
 
-        # If no files found with FILE: marker, try to extract code blocks directly
         if not files:
             logger.warning("No FILE: markers found, attempting to extract code blocks")
             files = self._fallback_parse(code_content, language)
@@ -316,9 +365,8 @@ class SelfHealingAgent:
 
     @staticmethod
     def _parse_python_code_blocks(code_blocks: list[str]) -> dict[str, str]:
-        """Parse Python code blocks into test and main files."""
         files = {}
-        for i, block in enumerate(code_blocks):
+        for block in code_blocks:
             if "import pytest" in block or "def test_" in block:
                 files["test_main.py"] = block.strip()
             else:
@@ -327,40 +375,20 @@ class SelfHealingAgent:
 
     @staticmethod
     def _parse_rust_code_blocks(code_blocks: list[str]) -> dict[str, str]:
-        """Parse Rust code blocks into lib.rs."""
         files = {}
         if code_blocks:
             files["lib.rs"] = code_blocks[0].strip()
         return files
 
     def _fallback_parse(self, code_content: str, language: str) -> dict[str, str]:
-        """Fallback parser when FILE: markers are missing.
-
-        Args:
-            code_content: Raw LLM response
-            language: Programming language
-
-        Returns:
-            Dictionary with default filenames
-        """
-        # Extract all code blocks
         code_blocks = re.findall(r"```(?:\w+)?\s*\n(.*?)```", code_content, re.DOTALL)
 
         if language == "python":
             return self._parse_python_code_blocks(code_blocks)
-        else:  # rust
+        else:
             return self._parse_rust_code_blocks(code_blocks)
 
     def _format_test_output(self, stdout: str, stderr: str) -> str:
-        """Format test output for error feedback.
-
-        Args:
-            stdout: Standard output
-            stderr: Standard error
-
-        Returns:
-            Formatted error message
-        """
         output_parts = []
 
         if stderr:

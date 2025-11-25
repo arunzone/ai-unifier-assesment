@@ -2,7 +2,7 @@
 Self-Healing Code Assistant Interface
 
 This page provides a UI for generating and self-healing code based on natural language descriptions.
-Supports Python and Rust with automatic test execution and iterative error correction.
+Supports Python and Rust with automatic language detection, test execution, and iterative error correction.
 """
 
 import os
@@ -17,20 +17,17 @@ st.set_page_config(
 )
 
 st.title("🔧 Self-Healing Code Assistant")
-st.markdown("Generate working code with tests from natural language descriptions")
+st.markdown("Generate working code with tests from natural language descriptions. **Language is auto-detected!**")
 
 # API configuration
 default_api_url = os.getenv("API_BASE_URL", "http://app:8000")
 API_BASE_URL = st.sidebar.text_input("API Base URL", value=default_api_url, help="Base URL for the code healing API")
 
 # Sidebar configuration
-st.sidebar.markdown("### Configuration")
-
-language = st.sidebar.selectbox(
-    "Programming Language",
-    options=["python", "rust"],
-    index=0,
-    help="Choose the programming language for code generation",
+st.sidebar.markdown("### ℹ️ Auto-Detection")
+st.sidebar.info(
+    "Programming language is automatically detected from your task description. "
+    "Mention 'Python' or 'Rust' in your description for best results."
 )
 
 # Example tasks
@@ -80,11 +77,11 @@ if generate_button:
             status_placeholder.info(f"🔄 Starting code generation for: {task_description}")
 
         try:
-            # Call the API
-            with st.spinner("Generating and healing code..."):
+            # Call the API (language is auto-detected)
+            with st.spinner("Detecting language and generating code..."):
                 response = requests.post(
                     f"{API_BASE_URL}/api/heal-code",
-                    json={"task_description": task_description, "language": language},
+                    json={"task_description": task_description},
                     timeout=300,  # 5 minutes timeout for complex code generation
                 )
                 response.raise_for_status()
@@ -97,13 +94,20 @@ if generate_button:
                 # Display final code
                 with code_container:
                     st.subheader("Generated Code")
-                    st.code(result["final_code"], language=language)
+                    # Try to detect language from code for syntax highlighting
+                    detected_lang = (
+                        "python"
+                        if ".py" in result.get("working_directory", "") or "def " in result["final_code"]
+                        else "rust"
+                    )
+                    st.code(result["final_code"], language=detected_lang)
 
                     # Download button
+                    file_ext = "py" if detected_lang == "python" else "rs"
                     st.download_button(
                         label="📥 Download Code",
                         data=result["final_code"],
-                        file_name=f"generated_code.{'py' if language == 'python' else 'rs'}",
+                        file_name=f"generated_code.{file_ext}",
                         mime="text/plain",
                     )
 
@@ -122,7 +126,13 @@ if generate_button:
                 with code_container:
                     st.subheader("Last Code Attempt")
                     if result["final_code"]:
-                        st.code(result["final_code"], language=language)
+                        # Try to detect language from code for syntax highlighting
+                        detected_lang = (
+                            "python"
+                            if ".py" in result.get("working_directory", "") or "def " in result["final_code"]
+                            else "rust"
+                        )
+                        st.code(result["final_code"], language=detected_lang)
                     else:
                         st.warning("No code was generated")
 

@@ -80,9 +80,12 @@ def agent(mock_model, mock_prompt_loader, mock_code_writer, mock_code_tester, mo
 @pytest.mark.asyncio
 async def test_successful_first_attempt(agent, mock_model, mock_code_tester):
     """Test successful code generation on first attempt."""
-    # Mock LLM response with properly formatted code
-    llm_response = Mock()
-    llm_response.content = """
+    # Mock LLM responses: first for language detection, then for code generation
+    language_response = Mock()
+    language_response.content = "python"
+
+    code_response = Mock()
+    code_response.content = """
 FILE: main.py
 ```python
 def add(a, b):
@@ -97,7 +100,10 @@ def test_add():
     assert add(1, 2) == 3
 ```
 """
-    mock_model.simple_model.return_value.ainvoke.return_value = llm_response
+    mock_model.simple_model.return_value.ainvoke.side_effect = [
+        language_response,
+        code_response,
+    ]
 
     # Mock successful test execution
     mock_code_tester.test = Mock(
@@ -110,25 +116,34 @@ def test_add():
         )
     )
 
-    result = await agent.heal("write an add function", "python")
+    result = await agent.heal("write an add function in Python")
 
     assert_that(result.success).is_true()
     assert_that(result.attempt_number).is_equal_to(0)
     assert_that(result.final_message).contains("Success")
+    assert_that(result.language).is_equal_to("python")
 
 
 @pytest.mark.asyncio
 async def test_failure_after_max_attempts(agent, mock_model, mock_code_tester):
     """Test failure after exhausting max attempts."""
-    # Mock LLM response
-    llm_response = Mock()
-    llm_response.content = """
+    # Mock LLM responses: language detection + 3 code generation attempts
+    language_response = Mock()
+    language_response.content = "rust"
+
+    code_response = Mock()
+    code_response.content = """
 FILE: lib.rs
 ```rust
 fn broken() {}
 ```
 """
-    mock_model.simple_model.return_value.ainvoke.return_value = llm_response
+    mock_model.simple_model.return_value.ainvoke.side_effect = [
+        language_response,
+        code_response,
+        code_response,  # Retry 1
+        code_response,  # Retry 2
+    ]
 
     # Mock failing test execution
     mock_code_tester.test = Mock(
@@ -141,19 +156,23 @@ fn broken() {}
         )
     )
 
-    result = await agent.heal("write broken rust code", "rust")
+    result = await agent.heal("write broken rust code")
 
     assert_that(result.success).is_false()
     assert_that(result.attempt_number).is_equal_to(2)  # 0, 1, 2 = 3 attempts
     assert_that(result.final_message).contains("Failed after 3 attempts")
+    assert_that(result.language).is_equal_to("rust")
 
 
 @pytest.mark.asyncio
 async def test_successful_second_attempt(agent, mock_model, mock_code_tester):
     """Test success on second attempt after initial failure."""
-    # Mock LLM responses
-    first_response = Mock()
-    first_response.content = """
+    # Mock LLM responses: language detection + 2 code generation attempts
+    language_response = Mock()
+    language_response.content = "python"
+
+    first_code_response = Mock()
+    first_code_response.content = """
 FILE: test.py
 ```python
 def broken():
@@ -161,8 +180,8 @@ def broken():
 ```
 """
 
-    second_response = Mock()
-    second_response.content = """
+    second_code_response = Mock()
+    second_code_response.content = """
 FILE: test.py
 ```python
 def fixed():
@@ -174,8 +193,9 @@ def test_fixed():
 """
 
     mock_model.simple_model.return_value.ainvoke.side_effect = [
-        first_response,
-        second_response,
+        language_response,
+        first_code_response,
+        second_code_response,
     ]
 
     # Mock test results: fail then succeed
@@ -198,11 +218,12 @@ def test_fixed():
         ]
     )
 
-    result = await agent.heal("write a function", "python")
+    result = await agent.heal("write a function in Python")
 
     assert_that(result.success).is_true()
     assert_that(result.attempt_number).is_equal_to(1)  # Success on second attempt
     assert_that(result.final_message).contains("Success")
+    assert_that(result.language).is_equal_to("python")
 
 
 @pytest.mark.asyncio
@@ -286,22 +307,34 @@ fn main() {}
 @pytest.mark.asyncio
 async def test_agent_loads_correct_system_prompts(agent, mock_prompt_loader):
     """Test that agent loads the correct prompt files."""
+    language_response = Mock()
+    language_response.content = "python"
+
     llm_response = Mock()
     llm_response.content = "FILE: test.py\n```python\npass\n```"
-    agent._model.simple_model.return_value.ainvoke.return_value = llm_response
+    agent._model.simple_model.return_value.ainvoke.side_effect = [
+        language_response,
+        llm_response,
+    ]
 
     agent._code_tester.test = Mock(
         return_value=CodeTesterOutput(success=True, stdout="", stderr="", exit_code=0, command="pytest")
     )
 
-    await agent.heal("test task", "python")
+    await agent.heal("test task")
 
-    mock_prompt_loader.load.assert_called_once_with("code_healing_system")
+    # Should be called twice: once for language detection, once for system prompt
+    assert_that(mock_prompt_loader.load.call_count).is_equal_to(2)
+    mock_prompt_loader.load.assert_any_call("language_detection")
+    mock_prompt_loader.load.assert_any_call("code_healing_system")
 
 
 @pytest.mark.asyncio
 async def test_agent_uses_fix_prompt_on_retry(agent, mock_prompt_loader, mock_model):
     """Test that agent uses fix prompt on retry attempts."""
+    language_response = Mock()
+    language_response.content = "python"
+
     first_response = Mock()
     first_response.content = "FILE: test.py\n```python\npass\n```"
 
@@ -309,6 +342,7 @@ async def test_agent_uses_fix_prompt_on_retry(agent, mock_prompt_loader, mock_mo
     second_response.content = "FILE: test.py\n```python\nfixed\n```"
 
     mock_model.simple_model.return_value.ainvoke.side_effect = [
+        language_response,
         first_response,
         second_response,
     ]
@@ -320,6 +354,6 @@ async def test_agent_uses_fix_prompt_on_retry(agent, mock_prompt_loader, mock_mo
         ]
     )
 
-    await agent.heal("test task", "python")
+    await agent.heal("test task")
 
     mock_prompt_loader.load.assert_any_call("code_healing_fix")
