@@ -13,3 +13,6 @@ htmlcov/
 .tox/
 data/corpus
 .code_healing_temp/
+.idea/
+.vscode/
+.DS_Store
