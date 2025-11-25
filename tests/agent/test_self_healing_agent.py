@@ -1,4 +1,4 @@
-"""Tests for SelfHealingAgent - one assert per test, clear and minimal."""
+"""Tests for CodingAgent - one assert per test, clear and minimal."""
 
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -7,15 +7,15 @@ import pytest
 from assertpy import assert_that
 from langchain_core.messages import AIMessage
 
-from ai_unifier_assesment.agent.self_healing_agent import SelfHealingAgent
+from ai_unifier_assesment.agent.self_healing_agent import CodingAgent
 from ai_unifier_assesment.agent.state import CodeHealingState
-from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterOutput
 from ai_unifier_assesment.agent.tools.code_writer_tool import CodeWriterOutput
+from ai_unifier_assesment.agent.tools.tester_models import CodeTesterOutput
 
 
 @pytest.fixture
 def agent():
-    """Create SelfHealingAgent with mocked dependencies."""
+    """Create CodingAgent with mocked dependencies."""
     mock_model = Mock()
     mock_model.simple_model.return_value = AsyncMock()
 
@@ -33,7 +33,7 @@ def agent():
     mock_event_processor = Mock()
     mock_settings = Mock()
 
-    return SelfHealingAgent(
+    return CodingAgent(
         model=mock_model,
         prompt_loader=mock_prompt_loader,
         code_writer=mock_code_writer,

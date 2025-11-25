@@ -7,10 +7,8 @@ from pathlib import Path
 import pytest
 from assertpy import assert_that
 
-from ai_unifier_assesment.agent.tools.code_tester_tool import (
-    CodeTesterInput,
-    CodeTesterTool,
-)
+from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterTool
+from ai_unifier_assesment.agent.tools.tester_models import CodeTesterInput
 
 # Check if cargo is available
 CARGO_AVAILABLE = shutil.which("cargo") is not None

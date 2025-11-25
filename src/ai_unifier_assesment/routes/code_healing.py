@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ai_unifier_assesment.agent.self_healing_agent import SelfHealingAgent
+from ai_unifier_assesment.agent.self_healing_agent import CodingAgent
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,9 @@ class CodeHealingRequest(BaseModel):
 @router.post("/api/heal-code/stream")
 async def heal_code_stream(
     request: CodeHealingRequest,
-    agent: Annotated[SelfHealingAgent, Depends(SelfHealingAgent)],
+    agent: Annotated[CodingAgent, Depends(CodingAgent)],
 ):
     return StreamingResponse(
-        agent.heal_stream(request.task_description),
+        agent.code_stream(request.task_description),
         media_type="text/event-stream",
     )

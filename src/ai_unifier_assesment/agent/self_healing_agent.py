@@ -10,14 +10,12 @@ from langgraph.graph import END, StateGraph
 
 from ai_unifier_assesment.agent.code_healing_event_processor import CodeHealingEventProcessor
 from ai_unifier_assesment.agent.state import CodeHealingState
-from ai_unifier_assesment.agent.tools.code_tester_tool import (
-    CodeTesterInput,
-    CodeTesterTool,
-)
+from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterTool
 from ai_unifier_assesment.agent.tools.code_writer_tool import (
     CodeWriterInput,
     CodeWriterTool,
 )
+from ai_unifier_assesment.agent.tools.tester_models import CodeTesterInput
 from ai_unifier_assesment.dependencies import get_settings
 from ai_unifier_assesment.large_language_model.model import Model
 from ai_unifier_assesment.resources.prompts.prompt_loader import PromptLoader
@@ -25,7 +23,7 @@ from ai_unifier_assesment.resources.prompts.prompt_loader import PromptLoader
 logger = logging.getLogger(__name__)
 
 
-class SelfHealingAgent:
+class CodingAgent:
     MAX_ATTEMPTS = 3
 
     def __init__(
@@ -70,7 +68,7 @@ class SelfHealingAgent:
         return {"language": detected_language}
 
     def _setup_initial_state(self, task_description: str) -> CodeHealingState:
-        logger.info(f"Starting self-healing agent for task: {task_description}")
+        logger.info(f"Starting coding agent for task: {task_description}")
 
         return CodeHealingState(
             task_description=task_description,
@@ -201,7 +199,7 @@ class SelfHealingAgent:
 
         return graph
 
-    async def heal_stream(self, task_description: str) -> AsyncGenerator[str, None]:
+    async def code_stream(self, task_description: str) -> AsyncGenerator[str, None]:
         graph = self._build_graph().compile()
         initial_state = self._setup_initial_state(task_description)
 
