@@ -2,12 +2,13 @@ import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, AsyncGenerator, Literal
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
+from ai_unifier_assesment.agent.code_healing_event_processor import CodeHealingEventProcessor
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_tester_tool import (
     CodeTesterInput,
@@ -33,21 +34,17 @@ class SelfHealingAgent:
         prompt_loader: Annotated[PromptLoader, Depends(PromptLoader)],
         code_writer: Annotated[CodeWriterTool, Depends(CodeWriterTool)],
         code_tester: Annotated[CodeTesterTool, Depends(CodeTesterTool)],
+        event_processor: Annotated[CodeHealingEventProcessor, Depends(CodeHealingEventProcessor)],
         settings: Annotated[object, Depends(get_settings)],
     ):
         self._model = model
         self._prompt_loader = prompt_loader
         self._code_writer = code_writer
         self._code_tester = code_tester
+        self._event_processor = event_processor
         self._settings = settings
 
     async def _detect_language_node(self, state: CodeHealingState) -> dict:
-        """
-        LangGraph Node: Uses LLM to detect programming language from task description.
-
-        This is the first node in the graph that analyzes the task and determines
-        whether to generate Python or Rust code.
-        """
         logger.info("--- NODE: Detecting programming language ---")
 
         language_prompt = self._prompt_loader.load("language_detection")
@@ -73,13 +70,6 @@ class SelfHealingAgent:
         return {"language": detected_language}
 
     def _setup_initial_state(self, task_description: str) -> CodeHealingState:
-        """
-        Initialize the state with task details.
-
-        Note: Language and working directory will be set by the graph nodes.
-        Language is detected by the LLM in the detect_language node.
-        Working directory is created after language is known.
-        """
         logger.info(f"Starting self-healing agent for task: {task_description}")
 
         return CodeHealingState(
@@ -89,9 +79,6 @@ class SelfHealingAgent:
         )
 
     def _setup_working_directory_node(self, state: CodeHealingState) -> dict:
-        """
-        LangGraph Node: Creates working directory after language is detected.
-        """
         logger.info("--- NODE: Setting up working directory ---")
 
         temp_dir = Path(tempfile.mkdtemp(prefix=f"code_healing_{state.language}_"))
@@ -166,21 +153,6 @@ class SelfHealingAgent:
         return {"final_message": final_message}
 
     def _build_graph(self) -> StateGraph:
-        """
-        Builds the LangGraph workflow for self-healing code generation.
-
-        Graph structure:
-        START -> detect_language -> setup_workdir -> code_generator -> write_code -> run_tests -> [decision]
-                                                                                                      |
-                                                      +-----------------------------------------------+
-                                                      |                    |                          |
-                                                    retry              success                    failure
-                                                      |                    |                          |
-                                                      v                    v                          v
-                                                increment_attempt      finalize                   finalize
-                                                      |                    |                          |
-                                                      +-> code_generator   +-> END                    +-> END
-        """
         graph = StateGraph(CodeHealingState)
 
         # Add nodes
@@ -221,38 +193,24 @@ class SelfHealingAgent:
         return graph
 
     async def heal(self, task_description: str) -> CodeHealingState:
-        """
-        Execute the self-healing code generation workflow using LangGraph.
-
-        This method uses a LangGraph state machine instead of an imperative loop.
-        The graph handles the retry logic, state transitions, and decision-making.
-
-        The workflow:
-        1. LLM detects programming language from task description
-        2. Sets up working directory
-        3. Generates code (or fixes it on retry)
-        4. Writes code to disk
-        5. Runs tests
-        6. Decides whether to retry, succeed, or fail
-
-        Args:
-            task_description: Natural language description of the coding task.
-                             Language will be auto-detected by the LLM.
-
-        Returns:
-            CodeHealingState with the final result
-        """
-        # Build and compile the graph
         graph = self._build_graph().compile()
 
-        # Setup initial state (language will be detected by the graph)
         initial_state = self._setup_initial_state(task_description)
 
-        # Execute the graph
         logger.info("Starting LangGraph execution...")
         final_state_dict = await graph.ainvoke(initial_state)
 
         return CodeHealingState(**final_state_dict)
+
+    async def heal_stream(self, task_description: str) -> AsyncGenerator[str, None]:
+        graph = self._build_graph().compile()
+        initial_state = self._setup_initial_state(task_description)
+
+        logger.info("Starting LangGraph streaming execution...")
+
+        async for event in graph.astream(initial_state, stream_mode=["updates"]):
+            async for sse_chunk in self._event_processor.process_graph_event(event):
+                yield sse_chunk
 
     async def _generate_initial_code(self, state: CodeHealingState) -> CodeHealingState:
         logger.info("Generating initial code...")

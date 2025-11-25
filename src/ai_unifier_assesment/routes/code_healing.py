@@ -4,6 +4,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ai_unifier_assesment.agent.self_healing_agent import SelfHealingAgent
@@ -38,25 +39,6 @@ async def heal_code(
     request: CodeHealingRequest,
     agent: Annotated[SelfHealingAgent, Depends(SelfHealingAgent)],
 ) -> CodeHealingResponse:
-    """Generate and self-heal code based on natural language description.
-
-    This endpoint:
-    1. Auto-detects programming language from task description
-    2. Generates code from the task description
-    3. Writes code to disk and runs tests
-    4. Iteratively fixes errors until tests pass or max attempts reached
-    5. Returns the final code and status
-
-    Args:
-        request: Contains task description (language is auto-detected)
-        agent: Self-healing agent instance
-
-    Returns:
-        CodeHealingResponse with final code and status
-
-    Raises:
-        HTTPException: If processing error occurs
-    """
     try:
         logger.info(f"Received code healing request: {request.task_description}")
 
@@ -78,3 +60,14 @@ async def heal_code(
     except Exception as e:
         logger.error(f"Unexpected error in heal_code: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
+@router.post("/api/heal-code/stream")
+async def heal_code_stream(
+    request: CodeHealingRequest,
+    agent: Annotated[SelfHealingAgent, Depends(SelfHealingAgent)],
+):
+    return StreamingResponse(
+        agent.heal_stream(request.task_description),
+        media_type="text/event-stream",
+    )

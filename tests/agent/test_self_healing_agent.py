@@ -66,13 +66,20 @@ def mock_settings():
 
 
 @pytest.fixture
-def agent(mock_model, mock_prompt_loader, mock_code_writer, mock_code_tester, mock_settings):
+def mock_event_processor():
+    """Mock event processor."""
+    return Mock()
+
+
+@pytest.fixture
+def agent(mock_model, mock_prompt_loader, mock_code_writer, mock_code_tester, mock_settings, mock_event_processor):
     """Create agent with mocked dependencies."""
     return SelfHealingAgent(
         model=mock_model,
         prompt_loader=mock_prompt_loader,
         code_writer=mock_code_writer,
         code_tester=mock_code_tester,
+        event_processor=mock_event_processor,
         settings=mock_settings,
     )
 
