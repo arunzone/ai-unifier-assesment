@@ -90,7 +90,8 @@ class CodeHealingEventProcessor:
             "finalize": FinalizeMapper(),
         }
 
-    async def process_graph_event(self, event: tuple):
+    async def process_graph_event(self, event: tuple[str, Dict[str, Any]]):
+        # LangGraph astream with stream_mode=["updates"] returns tuples: (node_name, {updates})
         updates = event[1] if len(event) > 1 else {}
 
         for node_name, update_dict in updates.items():

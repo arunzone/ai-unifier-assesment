@@ -27,6 +27,10 @@ class CodeWriterService:
     def write_code_to_disk(self, state: CodeHealingState) -> CodeHealingState:
         logger.info("Writing code to disk...")
 
+        if not state.current_code:
+            logger.error("No code available to write")
+            return state
+
         files = self._parse_code_files(state.current_code, state.language.value)
 
         if not files:

@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from assertpy import assert_that
+from pydantic import SecretStr
 
 from ai_unifier_assesment.config import OpenAIConfig, Settings
 from ai_unifier_assesment.large_language_model.model import Model
@@ -35,7 +36,7 @@ def test_stream_model_should_return_chat_openai():
 
         mock_chat.assert_called_once_with(
             base_url="https://api.example.com",
-            api_key="sk-test-key",
+            api_key=SecretStr("sk-test-key"),
             model="gpt-4o",
             streaming=True,
             stream_usage=True,

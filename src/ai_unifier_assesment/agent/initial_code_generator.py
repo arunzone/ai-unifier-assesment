@@ -36,7 +36,7 @@ class InitialCodeGenerator:
         llm = self._model.simple_model()
         response = await llm.ainvoke(messages)
 
-        state.current_code = response.content
-        logger.info(f"Generated {len(state.current_code)} characters of code")
+        state.current_code = response.content  # type: ignore[assignment]
+        logger.info(f"Generated {len(state.current_code)} characters of code")  # type: ignore[arg-type]
 
         return state

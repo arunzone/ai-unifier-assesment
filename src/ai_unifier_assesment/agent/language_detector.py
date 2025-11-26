@@ -1,8 +1,9 @@
 import logging
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from ai_unifier_assesment.agent.language import Language
@@ -25,7 +26,7 @@ class LanguageDetector:
         prompt_loader: Annotated[PromptLoader, Depends(PromptLoader)],
         settings: Annotated[object, Depends(get_settings)],
     ):
-        self._model = model.simple_model().with_structured_output(DetectedLanguage)
+        self._model: Runnable[Any, Any] = model.simple_model().with_structured_output(DetectedLanguage)
         self._prompt_loader = prompt_loader
         self._settings = settings
 
@@ -39,7 +40,7 @@ class LanguageDetector:
             HumanMessage(content=f"Task: {state.task_description}"),
         ]
 
-        response: DetectedLanguage = await self._model.ainvoke(messages)
+        response = await self._model.ainvoke(messages)
 
         detected_language = Language(response.language)
 

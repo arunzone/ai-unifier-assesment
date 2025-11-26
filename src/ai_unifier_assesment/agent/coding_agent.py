@@ -64,7 +64,7 @@ class CodingAgent:
 
         return {"working_directory": str(temp_dir)}
 
-    async def _code_generator_router_node(self, state: CodeHealingState) -> dict[str, str]:
+    async def _code_generator_router_node(self, state: CodeHealingState) -> dict[str, str | None]:
         logger.info(f"\n{'=' * 60}")
         logger.info(f"ATTEMPT {state.attempt_number + 1} / {self.MAX_ATTEMPTS}")
         logger.info(f"{'=' * 60}")
@@ -135,7 +135,7 @@ class CodingAgent:
             "attempts": state.attempt_number + 1,
         }
 
-    def _build_graph(self) -> StateGraph:
+    def _build_graph(self) -> StateGraph[CodeHealingState]:
         graph = StateGraph(CodeHealingState)
 
         # Add nodes
@@ -181,8 +181,8 @@ class CodingAgent:
 
         logger.info("Starting LangGraph streaming execution...")
 
-        async for event in graph.astream(initial_state, stream_mode=["updates"]):
-            async for sse_chunk in self._event_processor.process_graph_event(event):
+        async for event in graph.astream(initial_state.model_dump(), stream_mode=["updates"]):  # type: ignore[arg-type]
+            async for sse_chunk in self._event_processor.process_graph_event(event):  # type: ignore[arg-type]
                 yield sse_chunk
 
     async def _fix_code(self, state: CodeHealingState) -> CodeHealingState:
@@ -200,8 +200,8 @@ class CodingAgent:
         llm = self._model.simple_model()
         response = await llm.ainvoke(messages)
 
-        state.current_code = response.content
-        logger.info(f"Generated {len(state.current_code)} characters of fixed code")
+        state.current_code = response.content  # type: ignore[assignment]
+        logger.info(f"Generated {len(state.current_code)} characters of fixed code")  # type: ignore[arg-type]
 
         return state
 

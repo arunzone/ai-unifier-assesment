@@ -1,8 +1,9 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import Runnable
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
@@ -32,7 +33,9 @@ class TripPlannerAgent:
         self._tools = self._create_tools()
         self._simple_llm = self._model.simple_model()
         self._llm_with_tools = self._simple_llm.bind_tools(self._tools)
-        self._llm_structured_ouput = self._model.get_chat_model_for_evaluation().with_structured_output(TripItinerary)
+        self._llm_structured_ouput: Runnable[Any, Any] = (
+            self._model.get_chat_model_for_evaluation().with_structured_output(TripItinerary)
+        )
         self._itinerary_prompt = prompt_loader.load("trip_planner_itinerary")
 
     def _create_tools(self) -> list[StructuredTool]:

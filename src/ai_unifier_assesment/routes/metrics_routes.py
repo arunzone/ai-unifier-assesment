@@ -25,9 +25,9 @@ class MetricResponse(BaseModel):
 
 @router.get("/api/metrics", response_model=list[MetricResponse])
 async def get_metrics(
+    metrics_repo: Annotated[MetricsRepository, Depends(MetricsRepository)],
     endpoint: Optional[str] = Query(None, description="Filter by endpoint (chat or agent)"),
     hours: int = Query(24, description="Get metrics from last N hours"),
-    metrics_repo: Annotated[MetricsRepository, Depends(MetricsRepository)] = None,
 ):
     """Retrieve metrics for dashboard visualization."""
     metrics = metrics_repo.get_recent(hours=hours, endpoint=endpoint)

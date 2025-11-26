@@ -1,9 +1,10 @@
 import json
 import time
-from typing import Annotated, AsyncGenerator
+from typing import Annotated, Any, AsyncGenerator
 
 from fastapi import Depends
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import Runnable
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from ai_unifier_assesment.large_language_model.model import Model
@@ -93,7 +94,7 @@ class ChatService:
             ]
         )
 
-        chain = (
+        chain: Runnable[Any, Any] = (
             {"chat_history": lambda x: trimmer.invoke(x["chat_history"]), "message": lambda x: x["message"]}
             | prompt
             | llm
