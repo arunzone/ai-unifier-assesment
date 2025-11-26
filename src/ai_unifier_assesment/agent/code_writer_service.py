@@ -42,7 +42,6 @@ class CodeWriterService:
                 file_path=str(file_path),
                 language=state.language.value,
             )
-
             result = self._code_writer.write(write_input)
 
             if not result.success:
