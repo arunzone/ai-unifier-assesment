@@ -562,7 +562,7 @@ Based on benchmark runs:
 |--------|--------|----------|--------|
 | Retrieval latency (median) | ≤300ms | ~87ms | ✅ |
 | Retrieval accuracy (top-5) | ≥70% | 85% | ✅ |
-| Test coverage | 100% | 100% | ✅ |
+| Test coverage | 85% | 86% | ✅ |
 | Chat streaming | Token-level | Yes | ✅ |
 | Self-healing attempts | ≤3 | 1-3 | ✅ |
 

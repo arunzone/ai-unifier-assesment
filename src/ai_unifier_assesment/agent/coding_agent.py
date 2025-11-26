@@ -1,22 +1,19 @@
 import logging
-import re
 import tempfile
 from pathlib import Path
 from typing import Annotated, AsyncGenerator, Dict, Literal
 
 from fastapi import Depends
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
 from ai_unifier_assesment.agent.code_healing_event_processor import CodeHealingEventProcessor
+from ai_unifier_assesment.agent.code_writer_service import CodeWriterService
 from ai_unifier_assesment.agent.initial_code_generator import InitialCodeGenerator
 from ai_unifier_assesment.agent.language_detector import LanguageDetector
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterTool
-from ai_unifier_assesment.agent.tools.code_writer_tool import (
-    CodeWriterInput,
-    CodeWriterTool,
-)
+from ai_unifier_assesment.agent.tools.code_writer_tool import CodeWriterTool
 from ai_unifier_assesment.agent.tools.tester_models import CodeTesterInput
 from ai_unifier_assesment.dependencies import get_settings
 from ai_unifier_assesment.large_language_model.model import Model
@@ -38,6 +35,7 @@ class CodingAgent:
         event_processor: Annotated[CodeHealingEventProcessor, Depends(CodeHealingEventProcessor)],
         language_detector: Annotated[LanguageDetector, Depends(LanguageDetector)],
         initial_code_generator: Annotated[InitialCodeGenerator, Depends(InitialCodeGenerator)],
+        code_writer_service: Annotated[CodeWriterService, Depends(CodeWriterService)],
         settings: Annotated[object, Depends(get_settings)],
     ):
         self._model = model
@@ -47,6 +45,7 @@ class CodingAgent:
         self._event_processor = event_processor
         self._language_detector = language_detector
         self._initial_code_generator = initial_code_generator
+        self._code_writer_service = code_writer_service
         self._settings = settings
 
     async def _detect_language_node(self, state: CodeHealingState) -> dict[str, Language]:
@@ -83,8 +82,8 @@ class CodingAgent:
 
     def _write_code_node(self, state: CodeHealingState) -> dict:
         logger.info("--- NODE: Writing code to disk ---")
-        self._write_code_to_disk(state)
-        return {}  # No state updates needed, _write_code_to_disk modifies state in place
+        self._code_writer_service.write_code_to_disk(state)
+        return {}  # No state updates needed, write_code_to_disk modifies state in place
 
     def _run_tests_node(self, state: CodeHealingState) -> dict:
         logger.info("--- NODE: Running tests ---")
@@ -186,7 +185,6 @@ class CodingAgent:
             async for sse_chunk in self._event_processor.process_graph_event(event):
                 yield sse_chunk
 
-
     async def _fix_code(self, state: CodeHealingState) -> CodeHealingState:
         logger.info("Fixing code based on errors...")
 
@@ -204,34 +202,6 @@ class CodingAgent:
 
         state.current_code = response.content
         logger.info(f"Generated {len(state.current_code)} characters of fixed code")
-
-        return state
-
-    def _write_code_to_disk(self, state: CodeHealingState) -> CodeHealingState:
-        logger.info("Writing code to disk...")
-
-        files = self._parse_code_files(state.current_code, state.language.value)
-
-        if not files:
-            logger.error("No files found in generated code")
-            return state
-
-        for filename, content in files.items():
-            file_path = Path(state.working_directory) / filename
-            logger.info(f"Writing {filename} ({len(content)} chars)")
-
-            write_input = CodeWriterInput(
-                code=content,
-                file_path=str(file_path),
-                language=state.language.value,
-            )
-
-            result = self._code_writer.write(write_input)
-
-            if not result.success:
-                logger.error(f"Failed to write {filename}: {result.message}")
-            else:
-                logger.info(f"✓ Wrote {filename}")
 
         return state
 
@@ -258,50 +228,6 @@ class CodingAgent:
                 logger.info(f"Errors:\n{result.stderr[:500]}")
 
         return state
-
-    def _parse_code_files(self, code_content: str, language: str) -> dict[str, str]:
-        files = {}
-
-        pattern = r"FILE:\s*(\S+)\s*```(?:\w+)?\s*\n(.*?)```"
-
-        matches = re.finditer(pattern, code_content, re.DOTALL)
-
-        for match in matches:
-            filename = match.group(1).strip()
-            content = match.group(2).strip()
-            files[filename] = content
-            logger.info(f"Parsed file: {filename} ({len(content)} chars)")
-
-        if not files:
-            logger.warning("No FILE: markers found, attempting to extract code blocks")
-            files = self._fallback_parse(code_content, language)
-
-        return files
-
-    @staticmethod
-    def _parse_python_code_blocks(code_blocks: list[str]) -> dict[str, str]:
-        files = {}
-        for block in code_blocks:
-            if "import pytest" in block or "def test_" in block:
-                files["test_main.py"] = block.strip()
-            else:
-                files["main.py"] = block.strip()
-        return files
-
-    @staticmethod
-    def _parse_rust_code_blocks(code_blocks: list[str]) -> dict[str, str]:
-        files = {}
-        if code_blocks:
-            files["lib.rs"] = code_blocks[0].strip()
-        return files
-
-    def _fallback_parse(self, code_content: str, language: str) -> dict[str, str]:
-        code_blocks = re.findall(r"```(?:\w+)?\s*\n(.*?)```", code_content, re.DOTALL)
-
-        if language == "python":
-            return self._parse_python_code_blocks(code_blocks)
-        else:
-            return self._parse_rust_code_blocks(code_blocks)
 
     def _format_test_output(self, stdout: str, stderr: str) -> str:
         output_parts = []

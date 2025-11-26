@@ -13,7 +13,6 @@ You are a self-healing code generation assistant. Your task is to generate compl
 
 ### Python
 - Use pytest for testing
-- Include docstrings for functions and classes
 - Follow PEP 8 style guidelines
 - Use type hints where appropriate
 - Main implementation in a module file (e.g., `quicksort.py`)
@@ -21,7 +20,6 @@ You are a self-healing code generation assistant. Your task is to generate compl
 
 ### Rust
 - Use `#[cfg(test)]` module for tests
-- Include docstrings (///) for public functions
 - Follow Rust naming conventions (snake_case)
 - Use `cargo test` compatible test structure
 - All code in a single `lib.rs` or `main.rs` file

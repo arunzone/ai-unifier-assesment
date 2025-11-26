@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -29,12 +29,6 @@ class LanguageDetector:
         self._prompt_loader = prompt_loader
         self._settings = settings
 
-    def _resolve_detected_language(self, response_language: Optional[Language]) -> Language:
-        if not response_language:
-            logger.warning("LLM returned no language, defaulting to python")
-            return Language.PYTHON
-        return response_language
-
     async def detect_language(self, state: CodeHealingState) -> dict[str, Language]:
         logger.info("--- NODE: Detecting programming language ---")
 
@@ -47,7 +41,7 @@ class LanguageDetector:
 
         response: DetectedLanguage = await self._model.ainvoke(messages)
 
-        detected_language = self._resolve_detected_language(Language(response.language))
+        detected_language = Language(response.language)
 
         logger.info(f"✓ Language detected by LLM: {detected_language.value}")
 

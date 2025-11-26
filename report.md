@@ -16,7 +16,7 @@
 
 **RAGAS Evaluation**: Tried generated synthetic test sets using RAGAS rather than manual annotation. Deprioritised due to time taken to populate test sets. Trade-off: Generated manually annotated test sets.
 
-**Synchronous Ingestion**: Document processing runs at startup rather than async background jobs. Simplifies deployment but wouldn't scale to continuous ingestion.
+**Synchronous Ingestion**: Document processing runs at startup rather than async background jobs. Trade-off: My credential don't have openAI embeddings acess, so worked around using local ollama embedding (nomic-embed-text). Simplifies deployment but wouldn't scale to continuous ingestion.
 
 ## Agent Design
 

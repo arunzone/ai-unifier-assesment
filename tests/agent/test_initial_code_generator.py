@@ -11,7 +11,7 @@ from ai_unifier_assesment.large_language_model.model import Model
 from ai_unifier_assesment.resources.prompts.prompt_loader import PromptLoader
 from llm_helper import ai_response_for, extract_user_content
 
-PYTHON_CODE_BLOCK="""
+PYTHON_CODE_BLOCK = """
 FILE: quicksort.py
 ```python
 def quicksort(arr):
@@ -135,8 +135,7 @@ def llm_response(request: Request):
 async def test_should_have_main_file_name_in_python_code(httpx_mock: HTTPXMock):
     httpx_mock.add_callback(llm_response)
     state = CodeHealingState(
-        task_description="Write a Python function to sort an array using quicksort",
-        language=Language.PYTHON
+        task_description="Write a Python function to sort an array using quicksort", language=Language.PYTHON
     )
     settings = Settings()
     generator = InitialCodeGenerator(model=Model(settings), prompt_loader=PromptLoader(), settings=settings)
@@ -150,8 +149,7 @@ async def test_should_have_main_file_name_in_python_code(httpx_mock: HTTPXMock):
 async def test_should_contain_rust_code_block(httpx_mock: HTTPXMock):
     httpx_mock.add_callback(llm_response)
     state = CodeHealingState(
-        task_description="Write a Rust function to sort an array using quicksort",
-        language=Language.RUST
+        task_description="Write a Rust function to sort an array using quicksort", language=Language.RUST
     )
     settings = Settings()
     generator = InitialCodeGenerator(model=Model(settings), prompt_loader=PromptLoader(), settings=settings)
@@ -164,10 +162,7 @@ async def test_should_contain_rust_code_block(httpx_mock: HTTPXMock):
 @pytest.mark.asyncio
 async def test_should_handle_empty_response(httpx_mock: HTTPXMock):
     httpx_mock.add_callback(lambda request: Response(status_code=200, json=ai_response_for("")))
-    state = CodeHealingState(
-        task_description="Write a simple function",
-        language=Language.PYTHON
-    )
+    state = CodeHealingState(task_description="Write a simple function", language=Language.PYTHON)
     settings = Settings()
     generator = InitialCodeGenerator(model=Model(settings), prompt_loader=PromptLoader(), settings=settings)
 

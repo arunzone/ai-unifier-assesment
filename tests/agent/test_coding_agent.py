@@ -34,6 +34,8 @@ def agent():
     mock_settings = Mock()
     mock_language_detector = AsyncMock()
     mock_initial_code_generator = AsyncMock()
+    mock_initial_code_generator = AsyncMock()
+    code_writer_service = Mock()
 
     return CodingAgent(
         model=mock_model,
@@ -44,6 +46,7 @@ def agent():
         settings=mock_settings,
         language_detector=mock_language_detector,
         initial_code_generator=mock_initial_code_generator,
+        code_writer_service=code_writer_service,
     )
 
 
@@ -81,59 +84,6 @@ async def test_should_fix_code_using_test_output(agent):
     result = await agent._fix_code(state)
 
     assert_that(result.current_code).contains("fib(n-1) + fib(n-2)")
-
-
-# Code Parsing Tests
-
-
-def test_should_parse_files_with_file_markers(agent):
-    code_content = (
-        "FILE: main.py\n```python\nprint('hello')\n```\n\nFILE: test_main.py\n```python\ndef test(): pass\n```"
-    )
-
-    files = agent._parse_code_files(code_content, "python")
-
-    assert files == {"main.py": "print('hello')", "test_main.py": "def test(): pass"}
-
-
-def test_should_extract_filename_from_file_marker(agent):
-    code_content = "FILE: my_module.py\n```python\nx = 1\n```"
-
-    files = agent._parse_code_files(code_content, "python")
-
-    assert "my_module.py" in files
-
-
-def test_should_fallback_parse_python_test_code(agent):
-    code_content = "```python\nimport pytest\ndef test_add(): pass\n```"
-
-    files = agent._fallback_parse(code_content, "python")
-
-    assert files == {"test_main.py": "import pytest\ndef test_add(): pass"}
-
-
-def test_should_fallback_parse_python_main_code(agent):
-    code_content = "```python\ndef add(a, b): return a + b\n```"
-
-    files = agent._fallback_parse(code_content, "python")
-
-    assert files == {"main.py": "def add(a, b): return a + b"}
-
-
-def test_should_fallback_parse_rust_code_to_lib_rs(agent):
-    code_content = "```rust\nfn add(a: i32, b: i32) -> i32 { a + b }\n```"
-
-    files = agent._fallback_parse(code_content, "rust")
-
-    assert files == {"lib.rs": "fn add(a: i32, b: i32) -> i32 { a + b }"}
-
-
-def test_should_return_empty_dict_when_no_code_blocks_found(agent):
-    code_content = "Just plain text with no code blocks"
-
-    files = agent._parse_code_files(code_content, "python")
-
-    assert files == {}
 
 
 # Test Execution Tests
