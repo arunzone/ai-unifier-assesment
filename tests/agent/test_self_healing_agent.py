@@ -33,6 +33,7 @@ def agent():
     mock_event_processor = Mock()
     mock_settings = Mock()
     mock_language_detector = AsyncMock()
+    mock_initial_code_generator = AsyncMock()
 
     return CodingAgent(
         model=mock_model,
@@ -42,6 +43,7 @@ def agent():
         event_processor=mock_event_processor,
         settings=mock_settings,
         language_detector=mock_language_detector,
+        initial_code_generator=mock_initial_code_generator,
     )
 
 

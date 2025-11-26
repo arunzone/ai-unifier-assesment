@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from ai_unifier_assesment.agent.code_healing_event_processor import CodeHealingEventProcessor
+from ai_unifier_assesment.agent.initial_code_generator import InitialCodeGenerator
 from ai_unifier_assesment.agent.language_detector import LanguageDetector
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_tester_tool import CodeTesterTool
@@ -36,6 +37,7 @@ class CodingAgent:
         code_tester: Annotated[CodeTesterTool, Depends(CodeTesterTool)],
         event_processor: Annotated[CodeHealingEventProcessor, Depends(CodeHealingEventProcessor)],
         language_detector: Annotated[LanguageDetector, Depends(LanguageDetector)],
+        initial_code_generator: Annotated[InitialCodeGenerator, Depends(InitialCodeGenerator)],
         settings: Annotated[object, Depends(get_settings)],
     ):
         self._model = model
@@ -44,6 +46,7 @@ class CodingAgent:
         self._code_tester = code_tester
         self._event_processor = event_processor
         self._language_detector = language_detector
+        self._initial_code_generator = initial_code_generator
         self._settings = settings
 
     async def _detect_language_node(self, state: CodeHealingState) -> dict[str, Language]:
@@ -68,7 +71,7 @@ class CodingAgent:
         logger.info(f"{'=' * 60}")
 
         if state.attempt_number == 0:
-            updated_state = await self._generate_initial_code(state)
+            updated_state = await self._initial_code_generator.generate_initial_code(state)
         else:
             updated_state = await self._fix_code(state)
 
@@ -183,23 +186,6 @@ class CodingAgent:
             async for sse_chunk in self._event_processor.process_graph_event(event):
                 yield sse_chunk
 
-    async def _generate_initial_code(self, state: CodeHealingState) -> CodeHealingState:
-        logger.info("Generating initial code...")
-
-        system_prompt = self._prompt_loader.load("code_healing_system")
-
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Task: {state.task_description}\nLanguage: {state.language.value}"),
-        ]
-
-        llm = self._model.simple_model()
-        response = await llm.ainvoke(messages)
-
-        state.current_code = response.content
-        logger.info(f"Generated {len(state.current_code)} characters of code")
-
-        return state
 
     async def _fix_code(self, state: CodeHealingState) -> CodeHealingState:
         logger.info("Fixing code based on errors...")
