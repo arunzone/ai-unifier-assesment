@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from ai_unifier_assesment.agent.language import Language
 
@@ -75,8 +75,7 @@ class TripPlannerState(BaseModel):
     attractions: list[Attraction] = Field(default_factory=list)
     itinerary: Optional[TripItinerary] = None
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class CodeHealingState(BaseModel):
@@ -89,5 +88,4 @@ class CodeHealingState(BaseModel):
     success: bool = Field(default=False, description="Whether tests passed")
     final_message: str = Field(default="", description="Final status message")
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

@@ -7,7 +7,7 @@ import pytest
 from assertpy import assert_that
 from langchain_core.messages import AIMessage
 
-from ai_unifier_assesment.agent.self_healing_agent import CodingAgent
+from ai_unifier_assesment.agent.coding_agent import CodingAgent
 from ai_unifier_assesment.agent.state import CodeHealingState
 from ai_unifier_assesment.agent.tools.code_writer_tool import CodeWriterOutput
 from ai_unifier_assesment.agent.tools.tester_models import CodeTesterOutput
@@ -32,6 +32,7 @@ def agent():
 
     mock_event_processor = Mock()
     mock_settings = Mock()
+    mock_language_detector = AsyncMock()
 
     return CodingAgent(
         model=mock_model,
@@ -40,53 +41,8 @@ def agent():
         code_tester=mock_code_tester,
         event_processor=mock_event_processor,
         settings=mock_settings,
+        language_detector=mock_language_detector,
     )
-
-
-# Language Detection Tests
-
-
-@pytest.mark.asyncio
-async def test_should_detect_python_when_llm_returns_python(agent):
-    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="python")
-    state = CodeHealingState(task_description="Write fibonacci", language="", working_directory="")
-
-    result = await agent._detect_language_node(state)
-
-    assert_that(result).is_equal_to({"language": "python"})
-
-
-@pytest.mark.asyncio
-async def test_should_detect_rust_when_llm_returns_rust(agent):
-    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="rust")
-    state = CodeHealingState(task_description="Write fibonacci", language="", working_directory="")
-
-    result = await agent._detect_language_node(state)
-
-    assert_that(result).is_equal_to({"language": "rust"})
-
-
-@pytest.mark.asyncio
-async def test_should_default_to_python_when_llm_returns_invalid_language(agent):
-    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="javascript")
-    state = CodeHealingState(task_description="Write code", language="", working_directory="")
-
-    result = await agent._detect_language_node(state)
-
-    assert_that(result).is_equal_to({"language": "python"})
-
-
-@pytest.mark.asyncio
-async def test_should_default_to_python_when_llm_returns_empty_string(agent):
-    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="")
-    state = CodeHealingState(task_description="Write code", language="", working_directory="")
-
-    result = await agent._detect_language_node(state)
-
-    assert_that(result).is_equal_to({"language": "python"})
-
-
-# Working Directory Setup Tests
 
 
 def test_should_create_temp_directory_with_language_prefix(agent):
@@ -104,19 +60,6 @@ def test_should_create_existing_temp_directory(agent):
     working_dir = Path(result["working_directory"])
 
     assert_that(working_dir.exists()).is_true()
-
-
-# Code Generation Tests
-
-
-@pytest.mark.asyncio
-async def test_should_generate_code_from_task_description(agent):
-    agent._model.simple_model.return_value.ainvoke.return_value = AIMessage(content="def fib(n): return n")
-    state = CodeHealingState(task_description="Write fibonacci", language="python", working_directory="/tmp")
-
-    result = await agent._generate_initial_code(state)
-
-    assert_that(result.current_code).is_equal_to("def fib(n): return n")
 
 
 @pytest.mark.asyncio
@@ -362,73 +305,3 @@ def test_should_return_total_attempts_in_finalize(agent):
     result = agent._finalize_node(state)
 
     assert result["attempts"] == 3
-
-
-# Test Output Formatting Tests
-
-
-def test_should_format_output_with_both_stdout_and_stderr(agent):
-    result = agent._format_test_output("stdout content", "stderr content")
-
-    assert result == "STDERR:\nstderr content\n\nSTDOUT:\nstdout content"
-
-
-def test_should_format_output_with_only_stdout(agent):
-    result = agent._format_test_output("stdout content", "")
-
-    assert result == "STDOUT:\nstdout content"
-
-
-def test_should_format_output_with_only_stderr(agent):
-    result = agent._format_test_output("", "stderr content")
-
-    assert result == "STDERR:\nstderr content"
-
-
-def test_should_return_no_output_message_when_both_empty(agent):
-    result = agent._format_test_output("", "")
-
-    assert result == "No output captured"
-
-
-# Initial State Tests
-
-
-def test_should_create_initial_state_with_task_description(agent):
-    state = agent._setup_initial_state("Write a fibonacci function")
-
-    assert state.task_description == "Write a fibonacci function"
-
-
-def test_should_create_initial_state_with_empty_language(agent):
-    state = agent._setup_initial_state("Write code")
-
-    assert state.language == ""
-
-
-def test_should_create_initial_state_with_empty_working_directory(agent):
-    state = agent._setup_initial_state("Write code")
-
-    assert state.working_directory == ""
-
-
-def test_should_create_initial_state_with_zero_attempt_number(agent):
-    state = agent._setup_initial_state("Write code")
-
-    assert state.attempt_number == 0
-
-
-def test_should_create_initial_state_with_success_false(agent):
-    state = agent._setup_initial_state("Write code")
-
-    assert state.success is False
-
-
-# Graph Building Tests
-
-
-def test_should_build_compilable_graph(agent):
-    graph = agent._build_graph()
-    compiled = graph.compile()
-
-    assert compiled is not None

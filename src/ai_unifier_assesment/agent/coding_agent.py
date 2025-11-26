@@ -2,7 +2,7 @@ import logging
 import re
 import tempfile
 from pathlib import Path
-from typing import Annotated, AsyncGenerator, Literal
+from typing import Annotated, AsyncGenerator, Dict, Literal
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -20,6 +20,7 @@ from ai_unifier_assesment.agent.tools.tester_models import CodeTesterInput
 from ai_unifier_assesment.dependencies import get_settings
 from ai_unifier_assesment.large_language_model.model import Model
 from ai_unifier_assesment.resources.prompts.prompt_loader import PromptLoader
+from ai_unifier_assesment.agent.language import Language
 
 logger = logging.getLogger(__name__)
 
@@ -45,10 +46,11 @@ class CodingAgent:
         self._language_detector = language_detector
         self._settings = settings
 
-    async def _detect_language_node(self, state: CodeHealingState) -> dict:
-        return await self._language_detector.detect_language(state)
+    async def _detect_language_node(self, state: CodeHealingState) -> dict[str, Language]:
+        response: Dict[str, Language] = await self._language_detector.detect_language(state)
+        return response
 
-    def _setup_working_directory_node(self, state: CodeHealingState) -> dict:
+    def _setup_working_directory_node(self, state: CodeHealingState) -> dict[str, str]:
         logger.info("--- NODE: Setting up working directory ---")
 
         workspace_root = Path("/app")
@@ -60,7 +62,7 @@ class CodingAgent:
 
         return {"working_directory": str(temp_dir)}
 
-    async def _code_generator_router_node(self, state: CodeHealingState) -> dict:
+    async def _code_generator_router_node(self, state: CodeHealingState) -> dict[str, str]:
         logger.info(f"\n{'=' * 60}")
         logger.info(f"ATTEMPT {state.attempt_number + 1} / {self.MAX_ATTEMPTS}")
         logger.info(f"{'=' * 60}")

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class DetectedLanguage(BaseModel):
-    language: Literal[Language.PYTHON, Language.RUST] = Field(description="Detected programming language(python or rust)")
+    language: Literal["python", "rust"] = Field(description="Detected programming language(python or rust)")
 
 
 class LanguageDetector:
@@ -35,7 +35,7 @@ class LanguageDetector:
             return Language.PYTHON
         return response_language
 
-    async def detect_language(self, state: CodeHealingState) -> dict:
+    async def detect_language(self, state: CodeHealingState) -> dict[str, Language]:
         logger.info("--- NODE: Detecting programming language ---")
 
         language_prompt = self._prompt_loader.load("language_detection")
@@ -45,9 +45,9 @@ class LanguageDetector:
             HumanMessage(content=f"Task: {state.task_description}"),
         ]
 
-        response = await self._model.ainvoke(messages)
+        response: DetectedLanguage = await self._model.ainvoke(messages)
 
-        detected_language = self._resolve_detected_language(response.language)
+        detected_language = self._resolve_detected_language(Language(response.language))
 
         logger.info(f"✓ Language detected by LLM: {detected_language.value}")
 

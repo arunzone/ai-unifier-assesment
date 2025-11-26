@@ -1,7 +1,7 @@
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ai_unifier_assesment.repositories.metrics_repository import MetricsRepository
 
@@ -20,8 +20,7 @@ class MetricResponse(BaseModel):
     latency_ms: float
     metadata: Optional[dict]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 @router.get("/api/metrics", response_model=list[MetricResponse])
