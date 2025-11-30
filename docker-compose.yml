@@ -102,6 +102,31 @@ services:
         python -m ai_unifier_assesment.ingest --directory /app/data/corpus
       "
 
+  generate-testset:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/app
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=rag_user
+      - POSTGRES_PASSWORD=rag_password
+      - POSTGRES_DB=rag_evaluation
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ingestion:
+        condition: service_completed_successfully
+    command: >
+      bash -c "
+        pip install --timeout 300 --retries 3 --index-url https://pypi.org/simple/ -e . &&
+        python -m ai_unifier_assesment.generate_testset --sample
+      "
+
   benchmark:
     build:
       context: .
@@ -123,7 +148,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      ingestion:
+      generate-testset:
         condition: service_completed_successfully
     command: >
       bash -c "
