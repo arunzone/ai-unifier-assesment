@@ -20,7 +20,6 @@ def upgrade() -> None:
     # Create evaluation_questions table
     op.create_table(
         "evaluation_questions",
-        if_not_exists=True,
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("question", sa.Text(), nullable=False),
         sa.Column("ground_truth_answer", sa.Text(), nullable=False),
@@ -28,12 +27,12 @@ def upgrade() -> None:
         sa.Column("source_metadata", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
 
     # Create benchmark_runs table
     op.create_table(
         "benchmark_runs",
-        if_not_exists=True,
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("run_id", sa.String(length=50), nullable=False),
         sa.Column("top_k", sa.Integer(), nullable=False),
@@ -49,12 +48,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("run_id"),
+        if_not_exists=True,
     )
 
     # Create chat_metrics table
     op.create_table(
         "chat_metrics",
-        if_not_exists=True,
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("session_id", sa.String(length=100), nullable=False),
         sa.Column("prompt_tokens", sa.Integer(), nullable=False),
@@ -64,6 +63,7 @@ def upgrade() -> None:
         sa.Column("latency_ms", sa.Float(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
 
     # Create indexes

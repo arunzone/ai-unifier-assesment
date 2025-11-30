@@ -20,7 +20,6 @@ def upgrade() -> None:
     # Create agent_executions table
     op.create_table(
         "agent_executions",
-        if_not_exists=True,
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("session_id", sa.String(length=100), nullable=False),
         sa.Column("task_description", sa.Text(), nullable=False),
@@ -40,6 +39,7 @@ def upgrade() -> None:
         sa.Column("execution_metadata", sa.JSON(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
     op.create_index("ix_agent_executions_session_id", "agent_executions", ["session_id"], unique=False, if_not_exists=True)
     op.create_index("ix_agent_executions_status", "agent_executions", ["status"], unique=False, if_not_exists=True)
@@ -49,12 +49,12 @@ def upgrade() -> None:
     # Create message_store table (used by LangChain PostgresChatMessageHistory)
     op.create_table(
         "message_store",
-        if_not_exists=True,
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("session_id", sa.Text(), nullable=False),
         sa.Column("message", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.PrimaryKeyConstraint("id"),
+        if_not_exists=True,
     )
     op.create_index("ix_message_store_session_id", "message_store", ["session_id"], unique=False, if_not_exists=True)
 
